@@ -1,0 +1,203 @@
+# Codex++
+
+Codex++ 是一个面向 Codex App 的外部增强启动器。它不修改 Codex App 原始安装文件，而是通过外部 launcher 启动 Codex，并使用 Chromium DevTools Protocol 向渲染进程注入增强脚本。
+
+当前功能：
+
+- 在会话列表悬停显示“删除”按钮
+- 删除前确认，支持撤销
+- 优先尝试服务端删除；不可用时删除本地 Codex SQLite 会话记录
+- 在顶部菜单栏加入 `Codex++` 菜单
+- 支持开关：
+  - 插件选项解锁
+  - 特殊插件强制安装
+  - 会话删除
+- 支持 Windows 快捷方式安装/卸载
+- 支持 macOS 生成 `/Applications/Codex++.app`
+
+## 工作方式
+
+Codex++ 使用外部启动方式运行 Codex：
+
+1. 启动 Codex App，并附加：
+   - `--remote-debugging-port=9229`
+   - `--remote-allow-origins=http://127.0.0.1:9229`
+2. 启动本地 helper 服务，用于删除/撤销会话。
+3. 通过 CDP 注入 `renderer-inject.js`。
+4. 渲染端通过 CDP bridge 与本地 helper 通信，避免被 Codex 页面 CSP 拦截。
+
+这种方式不会修改 Codex 的 `app.asar`，也不需要往 Codex 安装目录写 DLL。
+
+## 环境要求
+
+- Python 3.11+
+- Windows 或 macOS
+- 已安装 Codex App
+
+安装依赖：
+
+```bash
+python -m pip install -e .
+```
+
+如需运行测试：
+
+```bash
+python -m pip install -e .[test]
+python -m pytest -q
+```
+
+## Windows 使用
+
+### 安装
+
+在项目目录执行：
+
+```bash
+python -m codex_session_delete setup
+```
+
+安装后会在桌面生成：
+
+```text
+Codex++.lnk
+```
+
+双击该快捷方式启动 Codex++。
+
+### 卸载
+
+可以在系统“设置 → 应用 → 已安装的应用”里卸载 `Codex++`。
+
+也可以在项目目录执行：
+
+```bash
+python -m codex_session_delete remove
+```
+
+如需同时删除 Codex++ 自己的日志和备份数据：
+
+```bash
+python -m codex_session_delete remove --remove-data
+```
+
+## macOS 使用
+
+### 安装
+
+```bash
+python -m codex_session_delete setup
+```
+
+默认会生成：
+
+```text
+/Applications/Codex++.app
+```
+
+### 卸载
+
+```bash
+python -m codex_session_delete remove
+```
+
+## 直接启动
+
+不安装快捷方式时，也可以直接运行：
+
+```bash
+python -m codex_session_delete launch
+```
+
+常用参数：
+
+```bash
+python -m codex_session_delete launch \
+  --app-dir "C:/Program Files/WindowsApps/OpenAI.Codex_xxx/app" \
+  --debug-port 9229 \
+  --helper-port 57321
+```
+
+## 数据与备份
+
+Codex++ 默认读取 Codex 本地数据库：
+
+```text
+~/.codex/state_5.sqlite
+```
+
+删除前会把相关记录备份到：
+
+```text
+~/.codex-session-delete/backups
+```
+
+隐藏启动失败日志位于：
+
+```text
+~/.codex-session-delete/launcher.log
+```
+
+## 常见问题
+
+### 双击 Codex++ 没反应
+
+先查看日志：
+
+```text
+%USERPROFILE%\.codex-session-delete\launcher.log
+```
+
+常见原因：
+
+- Codex App 没有安装或路径变化
+- 9229 端口被占用
+- Python 环境不可用
+
+### Codex++ 菜单没出现
+
+确认是从 `Codex++` 快捷方式启动，而不是直接启动原版 Codex。
+
+也可以检查 Codex 是否带了 CDP 参数：
+
+```text
+--remote-debugging-port=9229
+```
+
+### Windows 系统卸载失败
+
+请先更新到当前版本后重新安装一次：
+
+```bash
+python -m codex_session_delete setup
+```
+
+新版会写入稳定的系统卸载项，并使用绝对 Python 路径执行卸载。
+
+## 开发
+
+运行测试：
+
+```bash
+python -m pytest -q
+```
+
+项目结构：
+
+```text
+codex_session_delete/
+  cli.py                 CLI 入口
+  launcher.py            启动 Codex 并注入脚本
+  cdp.py                 CDP 通信与 bridge
+  helper_server.py       本地 helper 服务
+  storage_adapter.py     本地 SQLite 删除/撤销
+  windows_installer.py   Windows 快捷方式与卸载项
+  macos_installer.py     macOS app bundle 安装
+  inject/renderer-inject.js
+
+tests/                   自动化测试
+```
+
+## 说明
+
+Codex++ 是外部增强工具，不修改 Codex App 原始文件。Codex App 更新后，如果页面结构变化，可能需要更新注入脚本。
