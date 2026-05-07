@@ -19,8 +19,7 @@ EXECUTABLE_NAME = "CodexPlusPlus"
 def _launcher_command(options: "InstallOptions") -> str:
     if options.launcher_command:
         return options.launcher_command
-    python = shutil.which("python3") or shutil.which("python") or sys.executable
-    return f"{python} -m codex_session_delete launch"
+    return f"{sys.executable} -m codex_session_delete launch"
 
 
 def _app_root(options: "InstallOptions") -> Path:
