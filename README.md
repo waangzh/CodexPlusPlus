@@ -15,6 +15,26 @@ Codex++ 是一个面向 Codex App 的外部增强启动器。它不修改 Codex 
 - 支持 Windows 快捷方式安装/卸载
 - 支持 macOS 生成 `/Applications/Codex++.app`
 
+## 痛点
+
+API Key 登录模式下，Codex 原生插件入口会提示需要登录 ChatGPT，导致插件功能无法正常使用：
+
+![API Key 模式下插件入口不可用](docs/images/pain-plugin-disabled.png)
+
+同时，Codex 原生会话列表只有归档入口，没有真正的删除按钮：
+
+![原生会话列表缺少删除能力](docs/images/pain-no-delete-button.png)
+
+## 解决效果
+
+Codex++ 启动后会解锁插件入口，并在会话列表悬停时显示删除按钮：
+
+![Codex++ 解锁插件入口并添加删除按钮](docs/images/solution-plugin-and-delete.png)
+
+顶部菜单栏会出现 `Codex++`，点击后可以打开配置界面：
+
+![Codex++ 配置界面](docs/images/settings-panel.png)
+
 ## 工作方式
 
 Codex++ 使用外部启动方式运行 Codex：
@@ -49,7 +69,23 @@ python -m pytest -q
 
 ## Windows 使用
 
-### 安装
+### 图形菜单安装/卸载
+
+双击项目根目录的：
+
+```text
+setup.bat
+```
+
+然后按菜单选择：
+
+```text
+[1] Install Codex++
+[2] Uninstall Codex++
+[3] Exit
+```
+
+### 命令行安装
 
 在项目目录执行：
 
@@ -65,7 +101,7 @@ Codex++.lnk
 
 双击该快捷方式启动 Codex++。
 
-### 卸载
+### 命令行卸载
 
 可以在系统“设置 → 应用 → 已安装的应用”里卸载 `Codex++`。
 
