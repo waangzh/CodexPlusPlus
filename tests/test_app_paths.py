@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from codex_session_delete.app_paths import find_latest_codex_app_dir, find_macos_codex_app, user_data_candidates
+from codex_session_delete.app_paths import find_latest_codex_app_dir, find_macos_codex_app, resolve_codex_app_dir, user_data_candidates
 
 
 def test_find_latest_codex_app_dir_uses_highest_version(tmp_path):
@@ -32,7 +32,26 @@ def test_find_macos_codex_app_prefers_applications(tmp_path):
     assert result == system_app
 
 
+def test_find_macos_codex_app_detects_openai_codex_bundle(tmp_path):
+    openai_app = tmp_path / "Applications" / "OpenAI Codex.app"
+    openai_app.mkdir(parents=True)
+
+    result = find_macos_codex_app([tmp_path / "Applications"])
+
+    assert result == openai_app
+
+
 def test_find_macos_codex_app_returns_none_when_missing(tmp_path):
     result = find_macos_codex_app([tmp_path / "Applications" / "Codex.app"])
 
     assert result is None
+
+
+def test_resolve_codex_app_dir_uses_macos_discovery_on_darwin(monkeypatch, tmp_path):
+    mac_app = tmp_path / "Applications" / "OpenAI Codex.app"
+    mac_app.mkdir(parents=True)
+    monkeypatch.setattr("codex_session_delete.app_paths.sys.platform", "darwin")
+    monkeypatch.setattr("codex_session_delete.app_paths.find_macos_codex_app", lambda: mac_app)
+    monkeypatch.setattr("codex_session_delete.app_paths.find_latest_codex_app_dir", lambda: None)
+
+    assert resolve_codex_app_dir() == mac_app

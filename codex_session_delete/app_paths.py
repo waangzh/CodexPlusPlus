@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from pathlib import Path
 
 
@@ -42,9 +43,25 @@ def user_data_candidates() -> list[Path]:
     return candidates
 
 
+def _macos_app_candidates(root: Path) -> list[Path]:
+    if root.suffix == ".app":
+        return [root]
+    names = ["Codex.app", "OpenAI Codex.app", "OpenAI.Codex.app"]
+    return [root / name for name in names]
+
+
 def find_macos_codex_app(candidates: list[Path] | None = None) -> Path | None:
-    search = candidates or [Path("/Applications/Codex.app"), Path.home() / "Applications" / "Codex.app"]
-    for path in search:
-        if path.is_dir():
-            return path
+    search = candidates or [Path("/Applications"), Path.home() / "Applications"]
+    for root in search:
+        for path in _macos_app_candidates(root):
+            if path.is_dir():
+                return path
     return None
+
+
+def resolve_codex_app_dir(app_dir: Path | None = None) -> Path | None:
+    if app_dir is not None:
+        return app_dir
+    if sys.platform == "darwin":
+        return find_macos_codex_app()
+    return find_latest_codex_app_dir()

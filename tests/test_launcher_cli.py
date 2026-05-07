@@ -94,7 +94,7 @@ def test_cli_uninstall_dispatches_to_platform_installer(monkeypatch, tmp_path):
 
 def test_launch_retries_injection_until_codex_page_is_ready(monkeypatch, tmp_path):
     attempts = []
-    monkeypatch.setattr(launcher, "find_latest_codex_app_dir", lambda: tmp_path)
+    monkeypatch.setattr(launcher, "resolve_codex_app_dir", lambda app_dir=None: tmp_path)
     monkeypatch.setattr(launcher, "start_helper", lambda *args, **kwargs: FakeServer())
     monkeypatch.setattr(launcher.subprocess, "Popen", lambda *args, **kwargs: None)
 
@@ -111,6 +111,22 @@ def test_launch_retries_injection_until_codex_page_is_ready(monkeypatch, tmp_pat
 
     assert server.port == 57321
     assert len(attempts) == 2
+
+
+def test_launch_uses_resolved_app_dir(monkeypatch, tmp_path):
+    launched = []
+    mac_app = tmp_path / "Applications" / "OpenAI Codex.app"
+    executable = mac_app / "Contents" / "MacOS" / "Codex"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(launcher, "resolve_codex_app_dir", lambda app_dir=None: mac_app)
+    monkeypatch.setattr(launcher, "start_helper", lambda *args, **kwargs: FakeServer())
+    monkeypatch.setattr(launcher.subprocess, "Popen", lambda command: launched.append(command))
+    monkeypatch.setattr(launcher, "inject_with_retry", lambda *args, **kwargs: {"result": {}})
+
+    launcher.launch_and_inject(None, None, tmp_path / "backups", 9229, 57321)
+
+    assert launched[0][0] == str(executable)
 
 
 def test_cli_setup_alias_installs_with_default_launcher(monkeypatch):

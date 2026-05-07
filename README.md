@@ -135,7 +135,7 @@ python -m codex_session_delete remove --remove-data
 python -m codex_session_delete setup
 ```
 
-默认会生成：
+默认会自动查找 `/Applications/Codex.app`、`/Applications/OpenAI Codex.app` 或用户 Applications 目录下的 Codex 应用，并生成：
 
 ```text
 /Applications/Codex++.app
@@ -156,6 +156,15 @@ python -m codex_session_delete launch
 ```
 
 常用参数：
+
+```bash
+python -m codex_session_delete launch \
+  --app-dir "/Applications/OpenAI Codex.app" \
+  --debug-port 9229 \
+  --helper-port 57321
+```
+
+Windows 也可以手动指定 Codex 安装目录：
 
 ```bash
 python -m codex_session_delete launch \

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from codex_session_delete.app_paths import find_latest_codex_app_dir
+from codex_session_delete.app_paths import resolve_codex_app_dir
 from codex_session_delete.api_adapter import ApiAdapter, UnavailableApiAdapter
 from codex_session_delete.backup_store import BackupStore
 from codex_session_delete.cdp import inject_file
@@ -72,7 +72,7 @@ def inject_with_retry(debug_port: int, script_path: Path, helper_port: int, serv
 
 
 def launch_and_inject(app_dir: Path | None, db_path: Path | None, backup_dir: Path, debug_port: int, helper_port: int) -> HelperServer:
-    resolved_app_dir = app_dir or find_latest_codex_app_dir()
+    resolved_app_dir = resolve_codex_app_dir(app_dir)
     if resolved_app_dir is None:
         raise RuntimeError("Codex App directory not found")
     service = ApiFirstDeleteService(UnavailableApiAdapter(), db_path, backup_dir)
