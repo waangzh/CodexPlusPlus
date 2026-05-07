@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import subprocess
 from pathlib import Path
 
 
@@ -16,13 +17,25 @@ def _version_tuple(path: Path) -> tuple[int, ...]:
     return tuple(int(part) for part in match.group(1).split(".") if part.isdigit())
 
 
-def find_latest_codex_app_dir(windows_apps_dir: Path | None = None) -> Path | None:
-    root = windows_apps_dir or Path("C:/Program Files/WindowsApps")
-    candidates = [path / "app" for path in root.glob("OpenAI.Codex_*_x64__*") if (path / "app").is_dir()]
-    if not candidates:
+def find_latest_codex_app_dir() -> Path | None:
+    cmd = 'Get-AppxPackage -Name "OpenAI.Codex" | Select-Object -ExpandProperty InstallLocation'
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", cmd],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=8,
+            check=False,
+        )
+        if r.returncode != 0 or not (p := r.stdout.strip()):
+            return None
+        root = Path(p)
+        app = root / "app"
+        return app if app.is_dir() else root
+    except (OSError, subprocess.SubprocessError):
         return None
-    return max(candidates, key=lambda app_dir: _version_tuple(app_dir.parent))
-
 
 def user_data_candidates() -> list[Path]:
     candidates: list[Path] = []
