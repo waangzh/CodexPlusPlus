@@ -3,6 +3,7 @@ from __future__ import annotations
 import plistlib
 import shutil
 import stat
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,9 @@ EXECUTABLE_NAME = "CodexPlusPlus"
 
 
 def _launcher_command(options: "InstallOptions") -> str:
-    return options.launcher_command or "python -m codex_session_delete launch"
+    if options.launcher_command:
+        return options.launcher_command
+    return f"{sys.executable} -m codex_session_delete launch"
 
 
 def _app_root(options: "InstallOptions") -> Path:
