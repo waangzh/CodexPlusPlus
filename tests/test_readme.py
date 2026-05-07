@@ -13,6 +13,5 @@ def test_readme_includes_linux_do_friend_link():
     text = Path("README.md").read_text(encoding="utf-8")
 
     assert "## 友情链接" in text
-    assert "LINUX DO" in text
-    assert "https://linux.do" in text
-    assert "docs/images/linux-do.png" in text
+    assert "[LINUX DO](https://linux.do)" in text
+    assert "docs/images/linux-do.png" not in text

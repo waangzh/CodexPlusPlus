@@ -43,9 +43,7 @@ Codex++ 启动后会解锁插件入口，并在会话列表悬停时显示删除
 
 ## 友情链接
 
-<a href="https://linux.do" target="_blank">
-  <img src="docs/images/linux-do.png" alt="LINUX DO" width="260">
-</a>
+- [LINUX DO](https://linux.do)
 
 ## 工作方式
 
