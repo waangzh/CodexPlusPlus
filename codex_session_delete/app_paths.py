@@ -17,7 +17,15 @@ def _version_tuple(path: Path) -> tuple[int, ...]:
     return tuple(int(part) for part in match.group(1).split(".") if part.isdigit())
 
 
-def find_latest_codex_app_dir() -> Path | None:
+def find_latest_codex_app_dir(root: Path | None = None) -> Path | None:
+    if root is not None:
+        matches = [path for path in root.iterdir() if path.is_dir() and _version_tuple(path)]
+        if not matches:
+            return None
+        latest = max(matches, key=_version_tuple)
+        app = latest / "app"
+        return app if app.is_dir() else latest
+
     cmd = 'Get-AppxPackage -Name "OpenAI.Codex" | Select-Object -ExpandProperty InstallLocation'
     try:
         r = subprocess.run(

@@ -31,15 +31,55 @@
         position: fixed;
         right: 18px;
         bottom: 18px;
-        z-index: 2147483647;
+        z-index: 2147483000;
         padding: 10px 12px;
         border-radius: 8px;
         background: #111827;
         color: white;
         font: 13px system-ui, sans-serif;
         box-shadow: 0 8px 30px rgba(0,0,0,.25);
+        pointer-events: none;
       }
-      .codex-delete-toast button { margin-left: 10px; }
+      .codex-delete-toast button { margin-left: 10px; pointer-events: auto; }
+      .codex-delete-confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15,23,42,.28);
+      }
+      .codex-delete-confirm-content {
+        width: min(420px, calc(100vw - 48px));
+        border: 1px solid rgba(15,23,42,.12);
+        border-radius: 12px;
+        background: #ffffff;
+        color: #111827;
+        font: 14px system-ui, sans-serif;
+        box-shadow: 0 24px 80px rgba(15,23,42,.22);
+        padding: 18px;
+      }
+      .codex-delete-confirm-title { font-size: 16px; font-weight: 650; }
+      .codex-delete-confirm-message { margin-top: 8px; color: #4b5563; line-height: 1.45; }
+      .codex-delete-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .codex-delete-confirm-actions button {
+        border: 1px solid #d1d5db;
+        border-radius: 7px;
+        padding: 6px 12px;
+        background: #ffffff;
+        color: #111827;
+        font: 13px system-ui, sans-serif;
+      }
+      .codex-delete-confirm-actions [data-codex-delete-confirm="true"] {
+        border-color: #ef4444;
+        background: #dc2626;
+      }
       #${codexPlusMenuId}.codex-plus-menu-floating {
         position: fixed;
         top: 0;
@@ -373,6 +413,91 @@
     setTimeout(() => toast.remove(), 10000);
   }
 
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function confirmDelete(title) {
+    document.querySelectorAll(".codex-delete-confirm-overlay").forEach((node) => node.remove());
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "codex-delete-confirm-overlay";
+      overlay.innerHTML = `
+        <div class="codex-delete-confirm-content" role="dialog" aria-modal="true" aria-label="删除会话">
+          <div class="codex-delete-confirm-title">删除会话</div>
+          <div class="codex-delete-confirm-message">删除“${escapeHtml(title)}”？</div>
+          <div class="codex-delete-confirm-actions">
+            <button type="button" data-codex-delete-cancel="true">取消</button>
+            <button type="button" data-codex-delete-confirm="true">删除</button>
+          </div>
+        </div>
+      `;
+      const finish = (value, event) => {
+        event?.preventDefault();
+        event?.stopPropagation();
+        event?.target?.blur?.();
+        overlay.remove();
+        resolve(value);
+      };
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay || event.target.closest("[data-codex-delete-cancel]")) {
+          finish(false, event);
+          return;
+        }
+        if (event.target.closest("[data-codex-delete-confirm]")) {
+          finish(true, event);
+        }
+      }, true);
+      overlay.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") finish(false, event);
+      }, true);
+      document.body.appendChild(overlay);
+      overlay.querySelector("[data-codex-delete-cancel]")?.focus();
+    });
+  }
+
+  function rowHref(row) {
+    return row.getAttribute("href") || row.querySelector("a")?.getAttribute("href") || "";
+  }
+
+  function isCurrentSessionRow(row, ref) {
+    if (row.getAttribute("aria-current") === "page" || row.getAttribute("aria-current") === "true") return true;
+    const href = rowHref(row);
+    if (href) {
+      try {
+        const url = new URL(href, window.location.href);
+        if (url.href === window.location.href || url.pathname === window.location.pathname) return true;
+      } catch {
+        if (window.location.href.includes(href)) return true;
+      }
+    }
+    return !!ref.session_id && window.location.href.includes(ref.session_id);
+  }
+
+  function removeDeletedRow(row, button, ref) {
+    button.blur();
+    if (row.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    const shouldReload = isCurrentSessionRow(row, ref);
+    row.remove();
+    if (shouldReload) {
+      window.location.reload();
+    }
+  }
+
+  function releaseDeleteFocus(row, button) {
+    button.blur();
+    if (row.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  }
+
   function attachButton(row) {
     if (!codexPlusSettings().sessionDelete) return;
     if (row.dataset.codexDeleteRow === "true") return;
@@ -383,13 +508,25 @@
     button.type = "button";
     button.className = buttonClass;
     button.textContent = "删除";
+    const stopDeleteButtonEvent = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      releaseDeleteFocus(row, button);
+    };
+    ["pointerdown", "mousedown", "mouseup", "touchstart"].forEach((eventName) => {
+      button.addEventListener(eventName, stopDeleteButtonEvent, true);
+    });
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (!confirm(`删除会话“${ref.title}”？`)) return;
+      event.stopImmediatePropagation?.();
+      releaseDeleteFocus(row, button);
+      if (!(await confirmDelete(ref.title))) return;
+      releaseDeleteFocus(row, button);
       const result = await postJson("/delete", ref);
       if (result.status === "server_deleted" || result.status === "local_deleted") {
-        row.style.display = "none";
+        removeDeletedRow(row, button, ref);
         showToast(result.message || "Deleted", result.undo_token);
       } else {
         showToast(result.message || "Delete failed", null);
