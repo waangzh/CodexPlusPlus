@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -100,7 +102,22 @@ def wait_for_shutdown(server: HelperServer, codex_proc) -> None:
         shutdown_helper(server)
 
 
+def stop_existing_windows_launchers() -> None:
+    if sys.platform != "win32":
+        return
+    current_pid = os.getpid()
+    script = (
+        "Get-CimInstance Win32_Process | "
+        "Where-Object { $_.ProcessId -ne $env:CODEX_PLUS_PLUS_PID -and "
+        "$_.CommandLine -match 'pythonw?(.exe)?\"?\\s+-m\\s+codex_session_delete(\\s+launch)?(\\s|$)' } | "
+        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+    )
+    env = {**os.environ, "CODEX_PLUS_PLUS_PID": str(current_pid)}
+    subprocess.run(["powershell", "-NoProfile", "-Command", script], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+
+
 def run_launch(args: argparse.Namespace) -> int:
+    stop_existing_windows_launchers()
     try:
         server, codex_proc = launch_and_inject(args.app_dir, args.db, args.backup_dir, args.debug_port, args.helper_port)
     except Exception as exc:

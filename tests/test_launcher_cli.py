@@ -225,6 +225,46 @@ def test_launch_uses_resolved_app_dir(monkeypatch, tmp_path):
     assert "open" in launched[0]
 
 
+def test_cli_stops_existing_windows_launchers_before_launch(monkeypatch):
+    commands = []
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(cli.os, "getpid", lambda: 9876)
+    monkeypatch.setattr(cli.subprocess, "run", lambda command, **kwargs: commands.append((command, kwargs)))
+
+    cli.stop_existing_windows_launchers()
+
+    assert len(commands) == 1
+    command, kwargs = commands[0]
+    assert command[:3] == ["powershell", "-NoProfile", "-Command"]
+    assert "codex_session_delete" in command[3]
+    assert "pythonw?" in command[3]
+    assert "Stop-Process" in command[3]
+    assert kwargs["env"]["CODEX_PLUS_PLUS_PID"] == "9876"
+    assert kwargs["check"] is False
+
+
+def test_cli_skips_launcher_cleanup_on_non_windows(monkeypatch):
+    commands = []
+    monkeypatch.setattr(cli.sys, "platform", "linux")
+    monkeypatch.setattr(cli.subprocess, "run", lambda command, **kwargs: commands.append((command, kwargs)))
+
+    cli.stop_existing_windows_launchers()
+
+    assert commands == []
+
+
+def test_cli_launch_runs_launcher_cleanup_before_injection(monkeypatch):
+    events = []
+    monkeypatch.setattr(cli, "stop_existing_windows_launchers", lambda: events.append("cleanup"))
+    monkeypatch.setattr(cli, "launch_and_inject", lambda *args: events.append("launch") or (FakeServer(), None))
+    monkeypatch.setattr(cli, "wait_for_shutdown", lambda server, proc: events.append("wait"))
+
+    exit_code = cli.main(["launch"])
+
+    assert exit_code == 0
+    assert events == ["cleanup", "launch", "wait"]
+
+
 def test_cli_setup_alias_installs_with_default_launcher(monkeypatch):
     calls = []
     monkeypatch.setattr(cli, "install_codex_plus_plus", lambda options: calls.append(options))
