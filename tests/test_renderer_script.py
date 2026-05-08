@@ -37,6 +37,7 @@ def test_renderer_script_positions_delete_button_without_affecting_layout():
 def test_renderer_script_enables_plugin_entry_for_api_key_users():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "enablePluginEntry" in text
+    assert "Plugins" in text
     assert "disabled = false" in text
     assert "removeAttribute(\"disabled\")" in text
     assert "setAuthMethod(\"chatgpt\")" in text

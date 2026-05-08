@@ -357,7 +357,7 @@
   function enablePluginEntry() {
     if (!codexPlusSettings().pluginEntryUnlock) return;
     const buttons = Array.from(document.querySelectorAll("button"));
-    const pluginButton = buttons.find((element) => (element.textContent || "").trim() === "插件");
+    const pluginButton = buttons.find((element) => /^(插件|Plugins)$/i.test((element.textContent || "").trim()));
     if (!pluginButton) return;
     spoofChatGPTAuthMethod(pluginButton);
     pluginButton.disabled = false;

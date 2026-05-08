@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from codex_session_delete import cli, launcher
-from codex_session_delete.launcher import launch_codex
+from codex_session_delete.launcher import build_codex_command, launch_codex_app, packaged_app_user_model_id
 
 
 class FakeServer:
@@ -11,11 +11,11 @@ class FakeServer:
 
 
 def test_launch_codex_windows_adds_remote_debugging_port(monkeypatch):
-    app_dir = Path("C:/Program Files/WindowsApps/OpenAI.Codex_1.0.0.0_x64__abc/app")
+    app_dir = Path("C:/Codex/app")
     popen_calls = []
     monkeypatch.setattr(launcher.subprocess, "Popen", lambda args, **kw: popen_calls.append(args))
 
-    launch_codex(app_dir, 9229)
+    launch_codex_app(app_dir, 9229)
 
     assert popen_calls
     assert str(app_dir / "Codex.exe") in popen_calls[0][0] or str(app_dir / "codex.exe") in popen_calls[0][0]
@@ -23,11 +23,11 @@ def test_launch_codex_windows_adds_remote_debugging_port(monkeypatch):
 
 
 def test_launch_codex_windows_allows_devtools_websocket_origin(monkeypatch):
-    app_dir = Path("C:/Program Files/WindowsApps/OpenAI.Codex_1.0.0.0_x64__abc/app")
+    app_dir = Path("C:/Codex/app")
     popen_calls = []
     monkeypatch.setattr(launcher.subprocess, "Popen", lambda args, **kw: popen_calls.append(args))
 
-    launch_codex(app_dir, 9229)
+    launch_codex_app(app_dir, 9229)
 
     assert "--remote-allow-origins=http://127.0.0.1:9229" in popen_calls[0]
 
@@ -38,13 +38,46 @@ def test_launch_codex_macos_uses_open_command(monkeypatch, tmp_path):
     run_calls = []
     monkeypatch.setattr(launcher.subprocess, "run", lambda args, **kw: run_calls.append(args))
 
-    proc = launch_codex(app, 9229)
+    proc = launch_codex_app(app, 9229)
 
     assert proc is None
     assert len(run_calls) == 1
     assert run_calls[0][0] == "open"
     assert "-a" in run_calls[0]
     assert str(app) in run_calls[0]
+
+
+def test_packaged_app_user_model_id_from_windowsapps_path():
+    app_dir = Path("C:/Program Files/WindowsApps/OpenAI.Codex_26.506.2212.0_x64__2p2nqsd0c76g0/app")
+
+    assert packaged_app_user_model_id(app_dir) == "OpenAI.Codex_2p2nqsd0c76g0!App"
+
+
+def test_packaged_app_user_model_id_ignores_non_packaged_path():
+    app_dir = Path("C:/Codex/app")
+
+    assert packaged_app_user_model_id(app_dir) is None
+
+
+def test_launch_uses_packaged_activation_for_windowsapps(monkeypatch):
+    app_dir = Path("C:/Program Files/WindowsApps/OpenAI.Codex_26.506.2212.0_x64__2p2nqsd0c76g0/app")
+    activated = []
+    launched = []
+    monkeypatch.setattr(launcher.sys, "platform", "win32")
+    monkeypatch.setattr(
+        launcher,
+        "activate_packaged_app",
+        lambda aumid, arguments: activated.append((aumid, arguments)) or 1234,
+    )
+    monkeypatch.setattr(launcher.subprocess, "Popen", lambda command: launched.append(command))
+
+    assert launcher.launch_codex_app(app_dir, 9229) == 1234
+
+    assert activated == [(
+        "OpenAI.Codex_2p2nqsd0c76g0!App",
+        "--remote-debugging-port=9229 --remote-allow-origins=http://127.0.0.1:9229",
+    )]
+    assert launched == []
 
 
 def test_cli_keeps_helper_server_alive_after_injection(monkeypatch):
@@ -99,7 +132,7 @@ def test_launch_retries_injection_until_codex_page_is_ready(monkeypatch, tmp_pat
     attempts = []
     monkeypatch.setattr(launcher, "resolve_codex_app_dir", lambda app_dir=None: tmp_path)
     monkeypatch.setattr(launcher, "start_helper", lambda *args, **kwargs: FakeServer())
-    monkeypatch.setattr(launcher, "launch_codex", lambda *args: None)
+    monkeypatch.setattr(launcher, "launch_codex_app", lambda *args: None)
 
     def inject_after_retry(*args):
         attempts.append(args)
