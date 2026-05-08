@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from codex_session_delete import cli, launcher
-from codex_session_delete.launcher import build_codex_command
+from codex_session_delete.launcher import build_codex_command, packaged_app_user_model_id
 
 
 class FakeServer:
@@ -40,6 +40,39 @@ def test_build_codex_command_supports_macos_app_bundle(tmp_path):
     assert command[0] == str(executable)
     assert "--remote-debugging-port=9229" in command
     assert "--remote-allow-origins=http://127.0.0.1:9229" in command
+
+
+def test_packaged_app_user_model_id_from_windowsapps_path():
+    app_dir = Path("C:/Program Files/WindowsApps/OpenAI.Codex_26.506.2212.0_x64__2p2nqsd0c76g0/app")
+
+    assert packaged_app_user_model_id(app_dir) == "OpenAI.Codex_2p2nqsd0c76g0!App"
+
+
+def test_packaged_app_user_model_id_ignores_non_packaged_path():
+    app_dir = Path("C:/Codex/app")
+
+    assert packaged_app_user_model_id(app_dir) is None
+
+
+def test_launch_uses_packaged_activation_for_windowsapps(monkeypatch):
+    app_dir = Path("C:/Program Files/WindowsApps/OpenAI.Codex_26.506.2212.0_x64__2p2nqsd0c76g0/app")
+    activated = []
+    launched = []
+    monkeypatch.setattr(launcher.sys, "platform", "win32")
+    monkeypatch.setattr(
+        launcher,
+        "activate_packaged_app",
+        lambda aumid, arguments: activated.append((aumid, arguments)) or 1234,
+    )
+    monkeypatch.setattr(launcher.subprocess, "Popen", lambda command: launched.append(command))
+
+    assert launcher.launch_codex_app(app_dir, 9229) == 1234
+
+    assert activated == [(
+        "OpenAI.Codex_2p2nqsd0c76g0!App",
+        "--remote-debugging-port=9229 --remote-allow-origins=http://127.0.0.1:9229",
+    )]
+    assert launched == []
 
 
 def test_cli_keeps_helper_server_alive_after_injection(monkeypatch):
