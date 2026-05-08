@@ -27,6 +27,16 @@
         cursor: pointer;
       }
       [data-codex-delete-row="true"]:hover .${buttonClass} { opacity: 1; }
+      .codex-archive-delete-all {
+        border: 1px solid #ef4444;
+        border-radius: 7px;
+        background: #fee2e2;
+        color: #991b1b;
+        font: 12px system-ui, sans-serif;
+        line-height: 16px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
       .codex-delete-toast {
         position: fixed;
         right: 18px;
@@ -376,6 +386,14 @@
     });
   }
 
+  function archivedSessionRows() {
+    return sessionRows().filter((row) => row.querySelector('button[aria-label="取消归档对话"]') || row.outerHTML.includes("取消归档") || row.outerHTML.includes("unarchive"));
+  }
+
+  function archivedPageVisible() {
+    return archivedSessionRows().length > 0 || window.location.href.includes("archive") || (document.body.textContent || "").includes("已归档");
+  }
+
   function sessionRefFromRow(row) {
     const href = row.getAttribute("href") || row.querySelector("a")?.getAttribute("href") || "";
     const idMatch = href.match(/(?:session|conversation|thread)[=/:-]([A-Za-z0-9_.-]+)/i) || href.match(/([A-Za-z0-9_-]{8,})$/);
@@ -535,6 +553,45 @@
     row.appendChild(button);
   }
 
+  async function deleteArchivedSessions(rows) {
+    let deleted = 0;
+    for (const row of rows) {
+      const ref = sessionRefFromRow(row);
+      if (!ref.session_id) continue;
+      const result = await postJson("/delete", ref);
+      if (result.status === "server_deleted" || result.status === "local_deleted") {
+        row.remove();
+        deleted += 1;
+      }
+    }
+    showToast(`已删除 ${deleted} 个归档会话`, null);
+  }
+
+  function installArchivedDeleteAllButton() {
+    document.querySelectorAll("[data-codex-archive-delete-all]").forEach((node) => node.remove());
+    if (!codexPlusSettings().sessionDelete || !archivedPageVisible()) return;
+    const rows = archivedSessionRows();
+    if (rows.length === 0) return;
+    const firstRow = rows[0];
+    const container = firstRow.parentElement;
+    if (!container) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "codex-archive-delete-all";
+    button.dataset.codexArchiveDeleteAll = "true";
+    button.textContent = "删除全部归档";
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      const currentRows = archivedSessionRows();
+      if (currentRows.length === 0) return;
+      if (!(await confirmDelete(`全部 ${currentRows.length} 个归档会话`))) return;
+      await deleteArchivedSessions(currentRows);
+    }, true);
+    container.insertBefore(button, firstRow);
+  }
+
   function scanLightweight() {
     installStyle();
     installCodexPlusMenu();
@@ -544,6 +601,7 @@
     enablePluginEntry();
     unblockPluginInstallButtons();
     sessionRows().forEach(attachButton);
+    installArchivedDeleteAllButton();
   }
 
   function scan() {

@@ -99,6 +99,19 @@ def test_renderer_script_toast_does_not_capture_page_interactions():
     assert "pointer-events: auto" in text
 
 
+
+
+def test_renderer_script_supports_archived_conversation_delete_actions():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+    assert "archivedSessionRows" in text
+    assert "installArchivedDeleteAllButton" in text
+    assert "删除全部归档" in text
+    assert "deleteArchivedSessions" in text
+    assert "data-codex-archive-delete-all" in text
+    assert "data-app-action-sidebar-thread-id" in text
+    assert "归档" in text
+
+
 def test_renderer_script_adds_codex_plus_menu_with_feature_toggles():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "installCodexPlusMenu" in text
