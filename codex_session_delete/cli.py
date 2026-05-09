@@ -10,6 +10,7 @@ from pathlib import Path
 from codex_session_delete.helper_server import HelperServer
 from codex_session_delete.installers import InstallOptions, install_codex_plus_plus, uninstall_codex_plus_plus
 from codex_session_delete.launcher import launch_and_inject, shutdown_helper
+from codex_session_delete import watcher
 
 
 def add_launch_arguments(parser: argparse.ArgumentParser) -> None:
@@ -41,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
     remove_parser = subparsers.add_parser("remove", help="Remove Codex++ with defaults")
     remove_parser.add_argument("--install-root", type=Path, default=None)
     remove_parser.add_argument("--remove-data", action="store_true")
+
+    watch_parser = subparsers.add_parser("watch", help="Run the Codex watcher loop (auto-reinject when Codex is launched normally)")
+    watch_parser.add_argument("--debug-port", type=int, default=9229)
+
+    watch_install_parser = subparsers.add_parser("watch-install", help="Register the watcher to run at Windows logon")
+    watch_install_parser.add_argument("--debug-port", type=int, default=9229)
+
+    subparsers.add_parser("watch-remove", help="Unregister the watcher logon task")
+
+    subparsers.add_parser("watch-enable", help="Re-enable the watcher loop after it was disabled")
+    subparsers.add_parser("watch-disable", help="Disable the watcher loop without removing the logon task")
 
     add_launch_arguments(parser)
     return parser
@@ -109,7 +121,7 @@ def stop_existing_windows_launchers() -> None:
     script = (
         "Get-CimInstance Win32_Process | "
         "Where-Object { $_.ProcessId -ne $env:CODEX_PLUS_PLUS_PID -and "
-        "$_.CommandLine -match 'pythonw?(.exe)?\"?\\s+-m\\s+codex_session_delete(\\s+launch)?(\\s|$)' } | "
+        "$_.CommandLine -match 'pythonw?(.exe)?\"?\\s+-m\\s+codex_session_delete\\s+launch(\\s|$)' } | "
         "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
     )
     env = {**os.environ, "CODEX_PLUS_PLUS_PID": str(current_pid)}
@@ -129,6 +141,98 @@ def run_launch(args: argparse.Namespace) -> int:
     return 0
 
 
+WATCHER_RUN_NAME = "CodexPlusPlusWatcher"
+WATCHER_RUN_KEY = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+WATCHER_STARTUP_SHORTCUT_NAME = "CodexPlusPlusWatcher.lnk"
+
+
+def _watcher_command(debug_port: int) -> tuple[str, str, str]:
+    python = sys.executable
+    pythonw = Path(python).with_name("pythonw.exe")
+    exe = str(pythonw if pythonw.exists() else python)
+    arguments = f"-m codex_session_delete watch --debug-port {debug_port}"
+    full = f'"{exe}" {arguments}'
+    return exe, arguments, full
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def install_watcher_logon_task(debug_port: int) -> None:
+    if sys.platform != "win32":
+        raise RuntimeError("watch-install is only supported on Windows")
+    exe, arguments, full_command = _watcher_command(debug_port)
+    project_root = str(Path(__file__).resolve().parent.parent)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$Exe = {_ps_quote(exe)}
+$Args = {_ps_quote(arguments)}
+$RunFullCommand = {_ps_quote(full_command)}
+$ProjectRoot = {_ps_quote(project_root)}
+$ShortcutName = {_ps_quote(WATCHER_STARTUP_SHORTCUT_NAME)}
+# 1) HKCU Run value
+New-Item -Path '{WATCHER_RUN_KEY}' -Force | Out-Null
+Set-ItemProperty -Path '{WATCHER_RUN_KEY}' -Name '{WATCHER_RUN_NAME}' -Value $RunFullCommand
+# 2) Startup folder .lnk (survives registry cleanups)
+$Startup = [Environment]::GetFolderPath('Startup')
+New-Item -ItemType Directory -Force -Path $Startup | Out-Null
+$Shell = New-Object -ComObject WScript.Shell
+$ShortcutPath = Join-Path $Startup $ShortcutName
+$Shortcut = $Shell.CreateShortcut($ShortcutPath)
+$Shortcut.TargetPath = $Exe
+$Shortcut.Arguments = $Args
+$Shortcut.WorkingDirectory = $ProjectRoot
+$Shortcut.WindowStyle = 7
+$Shortcut.Description = 'Codex++ watcher (auto-inject Codex on start)'
+$Shortcut.Save()
+# 3) Echo what was written for verification
+$runValue = (Get-ItemProperty -Path '{WATCHER_RUN_KEY}' -Name '{WATCHER_RUN_NAME}').'{WATCHER_RUN_NAME}'
+Write-Output ("watch-install: HKCU Run = " + $runValue)
+Write-Output ("watch-install: Startup shortcut = " + $ShortcutPath)
+""".strip()
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.stdout:
+        print(result.stdout.strip())
+    # Start the watcher right now as well.
+    subprocess.Popen(
+        [exe, "-m", "codex_session_delete", "watch", "--debug-port", str(debug_port)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        creationflags=(
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        ),
+    )
+    print("watch-install: watcher process spawned")
+
+
+def uninstall_watcher_logon_task() -> None:
+    if sys.platform != "win32":
+        return
+    script = f"""
+Remove-ItemProperty -Path '{WATCHER_RUN_KEY}' -Name '{WATCHER_RUN_NAME}' -ErrorAction SilentlyContinue | Out-Null
+$Startup = [Environment]::GetFolderPath('Startup')
+$ShortcutPath = Join-Path $Startup {_ps_quote(WATCHER_STARTUP_SHORTCUT_NAME)}
+if (Test-Path $ShortcutPath) {{ Remove-Item $ShortcutPath -Force -ErrorAction SilentlyContinue }}
+Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" | Where-Object {{ $_.CommandLine -match 'codex_session_delete\\s+watch' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}
+""".strip()
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=False,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command in {"install", "setup"}:
@@ -136,6 +240,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command in {"uninstall", "remove"}:
         uninstall_codex_plus_plus(InstallOptions(install_root=args.install_root, remove_data=args.remove_data))
+        uninstall_watcher_logon_task()
+        return 0
+    if args.command == "watch":
+        return watcher.watch_loop(debug_port=args.debug_port)
+    if args.command == "watch-install":
+        install_watcher_logon_task(args.debug_port)
+        return 0
+    if args.command == "watch-remove":
+        uninstall_watcher_logon_task()
+        return 0
+    if args.command == "watch-enable":
+        watcher.enable_watcher()
+        return 0
+    if args.command == "watch-disable":
+        watcher.disable_watcher()
         return 0
     return run_launch(args)
 
