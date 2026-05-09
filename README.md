@@ -1,7 +1,7 @@
 # Codex++
 
 <p align="center">
-  <img src="docs/images/codex-plus-plus.png" alt="Codex++ 图标" width="512">
+  <img src="docs/images/codex-plus-plus.png" alt="Codex++ 图标" width="256">
 </p>
 
 Codex++ 是一个面向 Codex App 的外部增强启动器。它不修改 Codex App 原始安装文件，而是通过外部 launcher 启动 Codex，并使用 Chromium DevTools Protocol 向渲染进程注入增强脚本。

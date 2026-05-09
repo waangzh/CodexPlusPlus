@@ -13,7 +13,7 @@ def test_readme_includes_codex_plus_icon_and_toc():
     text = Path("README.md").read_text(encoding="utf-8")
 
     assert '<img src="docs/images/codex-plus-plus.png"' in text
-    assert 'width="512"' in text
+    assert 'width="256"' in text
     assert "## 目录" in text
     assert "- [Windows 使用](#windows-使用)" in text
     assert "- [常见问题](#常见问题)" in text
