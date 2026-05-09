@@ -193,6 +193,57 @@ Codex++ 默认读取 Codex 本地数据库：
 ~/.codex-session-delete/launcher.log
 ```
 
+## Windows 自动接管（可选）
+
+默认情况下 Codex++ 只在你**从 `Codex++` 快捷方式启动时**生效。如果你从开始菜单、任务栏或系统原生入口直接启动 Codex，那一次不会有注入，`Codex++` 菜单和插件解锁都不会出现。
+
+Windows 可以注册一个常驻 watcher 解决这个问题。它会每 3 秒探测一次本机 CDP 端口，发现 Codex 在跑但 CDP 没起来，就把这一批 Codex 进程杀掉、通过 launcher 重拉一次带注入的版本。这样不管你从哪里打开 Codex，都会被自动接管。
+
+注意代价：
+
+- 每次 Codex 通过原生路径启动，都会先打开一瞬间，再被 kill，再被 launcher 带 CDP 重开。视觉上是 1 ~ 2 秒的“打开→关闭→重开”闪烁。
+- watcher 以 `pythonw.exe` 常驻运行，登录时自动启动（通过 `HKCU\...\Run` 和 Startup 文件夹双路径注册，后者防止某些注册表清理工具干扰）。
+
+### 安装
+
+```bash
+python -m codex_session_delete watch-install
+```
+
+安装完成后 watcher 会立即启动，无需重启。
+
+### 卸载
+
+```bash
+python -m codex_session_delete watch-remove
+```
+
+`remove` / 系统卸载 Codex++ 时会自动连带执行 `watch-remove`，不需要手动处理。
+
+### 临时开关
+
+保留自启项、但让 watcher 不再自动接管：
+
+```bash
+python -m codex_session_delete watch-disable
+python -m codex_session_delete watch-enable
+```
+
+### 日志
+
+```text
+%USERPROFILE%\.codex-session-delete\watcher.log
+```
+
+示例：
+
+```text
+[...] watcher started (interval=3.0s)
+[...] Codex running without CDP (pids=[...]); attempting takeover
+[...] takeover: killing 4 codex pid(s): [...]
+[...] takeover: CDP is up on 9229 (launcher pid=...)
+```
+
 ## 常见问题
 
 ### 双击 Codex++ 没反应
@@ -248,6 +299,7 @@ codex_session_delete/
   storage_adapter.py     本地 SQLite 删除/撤销
   windows_installer.py   Windows 快捷方式与卸载项
   macos_installer.py     macOS app bundle 安装
+  watcher.py             Windows 常驻 watcher（可选，原生启动接管）
   inject/renderer-inject.js
 
 tests/                   自动化测试
