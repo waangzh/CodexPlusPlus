@@ -148,8 +148,15 @@ def test_renderer_script_clears_focus_and_removes_deleted_rows():
 def test_renderer_script_uses_in_page_confirm_and_stops_early_pointer_events():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "confirm(" not in text
-    assert "codex-delete-confirm-overlay" in text
-    assert "escapeHtml(title)" in text
+    assert "codex-delete-confirm-popover" in text
+    assert "left = rect.right + gap" in text
+    assert "确认" in text
+    assert "取消" in text
+    popover_html = text[text.index("popover.innerHTML"):text.index("const place", text.index("popover.innerHTML"))]
+    assert popover_html.index('data-codex-delete-cancel="true"') < popover_html.index('data-codex-delete-confirm="true"')
+    assert "window.__codexSessionDeleteConfirmCleanup?.()" in text
+    assert "window.__codexSessionDeleteConfirmCleanup = cancelCurrent" in text
+    assert "window.__codexSessionDeleteConfirmCleanup !== cancelCurrent" in text
     assert "stopImmediatePropagation" in text
     assert "\"pointerdown\", \"mousedown\", \"mouseup\", \"touchstart\"" in text
 
@@ -169,7 +176,7 @@ def test_renderer_script_toast_does_not_capture_page_interactions():
 def test_renderer_script_sidebar_delete_opens_on_pointerup_when_click_is_unreliable():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "openDeleteConfirm" in text
-    assert "codexDeleteVersion = \"5\"" in text
+    assert "codexDeleteVersion = \"6\"" in text
     assert "existingDeleteButtons.length === 1" in text
     assert "existingDeleteButtons[0].dataset.codexDeleteVersion === codexDeleteVersion" in text
     assert "existingDeleteButtons.forEach((button) => button.remove())" in text
@@ -183,7 +190,7 @@ def test_renderer_script_sidebar_delete_opens_on_pointerup_when_click_is_unrelia
 
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "updateDeleteButtonOffsets" in text
-    assert "codexDeleteStyleVersion = \"4\"" in text
+    assert "codexDeleteStyleVersion = \"5\"" in text
     assert "right: 66px" in text
     assert "确认" in text
     assert "归档对话" in text

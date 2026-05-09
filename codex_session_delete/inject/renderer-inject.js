@@ -2,9 +2,9 @@
   const helperBase = window.__CODEX_SESSION_DELETE_HELPER__ || "http://127.0.0.1:57321";
   const buttonClass = "codex-delete-button";
   const styleId = "codex-delete-style";
-  const codexDeleteStyleVersion = "4";
+  const codexDeleteStyleVersion = "5";
   const codexPlusMenuId = "codex-plus-menu";
-  const codexDeleteVersion = "5";
+  const codexDeleteVersion = "6";
   const codexArchiveDeleteAllVersion = "2";
   const codexPlusVersion = "1.0.4";
   const codexPlusSettingsKey = "codexPlusSettings";
@@ -66,44 +66,55 @@
         pointer-events: none;
       }
       .codex-delete-toast button { margin-left: 10px; pointer-events: auto; }
-      .codex-delete-confirm-overlay {
+      .codex-delete-confirm-popover {
         position: fixed;
-        inset: 0;
         z-index: 2147483200;
         display: flex;
         align-items: center;
-        justify-content: center;
-        background: rgba(15,23,42,.28);
-      }
-      .codex-delete-confirm-content {
-        width: min(420px, calc(100vw - 48px));
+        gap: 6px;
+        padding: 6px;
         border: 1px solid rgba(15,23,42,.12);
-        border-radius: 12px;
+        border-radius: 8px;
         background: #ffffff;
         color: #111827;
-        font: 14px system-ui, sans-serif;
-        box-shadow: 0 24px 80px rgba(15,23,42,.22);
-        padding: 18px;
+        font: 12px system-ui, sans-serif;
+        box-shadow: 0 12px 32px rgba(15,23,42,.22);
+        -webkit-app-region: no-drag;
       }
-      .codex-delete-confirm-title { font-size: 16px; font-weight: 650; }
-      .codex-delete-confirm-message { margin-top: 8px; color: #4b5563; line-height: 1.45; }
-      .codex-delete-confirm-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 18px;
+      .codex-delete-confirm-popover::before {
+        content: "";
+        position: absolute;
+        left: -5px;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        transform: translateY(-50%) rotate(45deg);
+        border-left: 1px solid rgba(15,23,42,.12);
+        border-bottom: 1px solid rgba(15,23,42,.12);
+        background: #ffffff;
       }
-      .codex-delete-confirm-actions button {
+      .codex-delete-confirm-popover[data-placement="left"]::before {
+        left: auto;
+        right: -5px;
+        border-left: 0;
+        border-bottom: 0;
+        border-right: 1px solid rgba(15,23,42,.12);
+        border-top: 1px solid rgba(15,23,42,.12);
+      }
+      .codex-delete-confirm-popover button {
         border: 1px solid #d1d5db;
-        border-radius: 7px;
-        padding: 6px 12px;
+        border-radius: 6px;
+        padding: 4px 8px;
         background: #ffffff;
         color: #111827;
-        font: 13px system-ui, sans-serif;
+        font: 12px system-ui, sans-serif;
+        line-height: 16px;
+        cursor: pointer;
       }
-      .codex-delete-confirm-actions [data-codex-delete-confirm="true"] {
+      .codex-delete-confirm-popover [data-codex-delete-confirm="true"] {
         border-color: #ef4444;
         background: #dc2626;
+        color: #ffffff;
       }
       #${codexPlusMenuId}.codex-plus-menu-floating {
         position: fixed;
@@ -535,39 +546,70 @@
     setTimeout(() => toast.remove(), 10000);
   }
 
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-  }
-
-  function confirmDelete(title) {
-    document.querySelectorAll(".codex-delete-confirm-overlay").forEach((node) => node.remove());
+  function confirmDelete(title, anchor) {
+    window.__codexSessionDeleteConfirmCleanup?.();
+    document.querySelectorAll(".codex-delete-confirm-popover, .codex-delete-confirm-overlay").forEach((node) => node.remove());
     return new Promise((resolve) => {
-      const overlay = document.createElement("div");
-      overlay.className = "codex-delete-confirm-overlay";
-      overlay.innerHTML = `
-        <div class="codex-delete-confirm-content" role="dialog" aria-modal="true" aria-label="删除会话">
-          <div class="codex-delete-confirm-title">删除会话</div>
-          <div class="codex-delete-confirm-message">删除“${escapeHtml(title)}”？</div>
-          <div class="codex-delete-confirm-actions">
-            <button type="button" data-codex-delete-cancel="true">取消</button>
-            <button type="button" data-codex-delete-confirm="true">删除</button>
-          </div>
-        </div>
+      const popover = document.createElement("div");
+      popover.className = "codex-delete-confirm-popover";
+      popover.setAttribute("role", "dialog");
+      popover.setAttribute("aria-modal", "false");
+      popover.setAttribute("aria-label", `删除会话：${title}`);
+      popover.style.visibility = "hidden";
+      popover.innerHTML = `
+        <button type="button" data-codex-delete-cancel="true">取消</button>
+        <button type="button" data-codex-delete-confirm="true">确认</button>
       `;
+      const place = () => {
+        const rect = anchor?.getBoundingClientRect?.();
+        if (!rect) return;
+        const gap = 8;
+        const margin = 8;
+        let left = rect.right + gap;
+        let placement = "right";
+        if (left + popover.offsetWidth > window.innerWidth - margin) {
+          left = Math.max(margin, rect.left - popover.offsetWidth - gap);
+          placement = "left";
+        }
+        const top = Math.max(margin, Math.min(window.innerHeight - popover.offsetHeight - margin, rect.top + rect.height / 2 - popover.offsetHeight / 2));
+        popover.dataset.placement = placement;
+        popover.style.left = `${left}px`;
+        popover.style.top = `${top}px`;
+        popover.style.visibility = "visible";
+      };
+      let outsideHandler = null;
+      let keyHandler = null;
+      let settled = false;
+      const cleanup = () => {
+        popover.remove();
+        if (outsideHandler) document.removeEventListener("pointerdown", outsideHandler, true);
+        if (keyHandler) document.removeEventListener("keydown", keyHandler, true);
+        window.removeEventListener("resize", place, true);
+        window.removeEventListener("scroll", place, true);
+        if (window.__codexSessionDeleteConfirmCleanup === cancelCurrent) {
+          window.__codexSessionDeleteConfirmCleanup = null;
+        }
+      };
       const finish = (value, event) => {
+        if (settled) return;
+        settled = true;
         event?.preventDefault();
         event?.stopPropagation();
         event?.target?.blur?.();
-        overlay.remove();
+        cleanup();
         resolve(value);
       };
-      overlay.addEventListener("click", (event) => {
-        if (event.target === overlay || event.target.closest("[data-codex-delete-cancel]")) {
+      const cancelCurrent = () => finish(false);
+      window.__codexSessionDeleteConfirmCleanup = cancelCurrent;
+      popover.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+      }, true);
+      popover.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        if (event.target.closest("[data-codex-delete-cancel]")) {
           finish(false, event);
           return;
         }
@@ -575,11 +617,22 @@
           finish(true, event);
         }
       }, true);
-      overlay.addEventListener("keydown", (event) => {
+      outsideHandler = (event) => {
+        if (!popover.contains(event.target) && event.target !== anchor) finish(false, event);
+      };
+      keyHandler = (event) => {
         if (event.key === "Escape") finish(false, event);
-      }, true);
-      document.body.appendChild(overlay);
-      overlay.querySelector("[data-codex-delete-cancel]")?.focus();
+      };
+      document.body.appendChild(popover);
+      place();
+      window.addEventListener("resize", place, true);
+      window.addEventListener("scroll", place, true);
+      setTimeout(() => {
+        if (settled || window.__codexSessionDeleteConfirmCleanup !== cancelCurrent) return;
+        document.addEventListener("pointerdown", outsideHandler, true);
+        document.addEventListener("keydown", keyHandler, true);
+      }, 0);
+      popover.querySelector("[data-codex-delete-cancel]")?.focus();
     });
   }
 
@@ -635,7 +688,7 @@
     event.stopPropagation();
     event.stopImmediatePropagation?.();
     releaseDeleteFocus(row, button);
-    confirmDelete(ref.title).then(async (confirmed) => {
+    confirmDelete(ref.title, button).then(async (confirmed) => {
       if (!confirmed) return;
       releaseDeleteFocus(row, button);
       const result = await postJson("/delete", ref);
@@ -805,7 +858,7 @@
         showToast("删除失败：未找到归档会话 ID", null);
         return;
       }
-      if (!(await confirmDelete(ref.title))) return;
+      if (!(await confirmDelete(ref.title, button))) return;
       const result = await postJson("/delete", ref);
       if (result.status === "server_deleted" || result.status === "local_deleted") {
         row.remove();
@@ -855,7 +908,7 @@
       event.stopImmediatePropagation?.();
       const currentRows = archivedRows();
       if (currentRows.length === 0) return;
-      if (!(await confirmDelete(`全部 ${currentRows.length} 个归档会话`))) return;
+      if (!(await confirmDelete(`全部 ${currentRows.length} 个归档会话`, button))) return;
       await deleteArchivedSessions(currentRows);
     };
     button.addEventListener("pointerup", openArchivedDeleteAllConfirm, true);
@@ -898,7 +951,7 @@
   }
 
   function isExtensionUiNode(node) {
-    return !!node?.closest?.(".codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, #codex-plus-menu");
+    return !!node?.closest?.(".codex-delete-toast, .codex-delete-confirm-popover, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, #codex-plus-menu");
   }
 
   const scanRelevantSelector = '[data-app-action-sidebar-thread-id], [data-codex-archive-page-row="true"], [data-codex-archive-delete-all], .app-header-tint, button[aria-label="已归档对话"], button[aria-label="Archived conversations"], button:disabled.w-full.justify-center, [role="button"][aria-disabled="true"].cursor-not-allowed';
