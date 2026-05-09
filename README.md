@@ -65,7 +65,7 @@ Codex++ 启动后会解锁插件入口，并在会话列表悬停时显示删除
 
 欢迎扫码加入 Codex++ 交流群，反馈问题、交流使用体验或提出新功能建议：
 
-<img src="docs/images/discussion-group-qr.jpg" alt="Codex++ 交流群二维码" width="260">
+<img width="1080" height="1596" alt="f5885733b2d29c3cf56f70b625343189" src="https://github.com/user-attachments/assets/a59e44c3-0504-4a58-9a25-7035f8fcb097" />
 
 ## 友情链接
 
