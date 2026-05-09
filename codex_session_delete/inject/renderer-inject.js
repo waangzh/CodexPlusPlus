@@ -376,10 +376,22 @@
     return true;
   }
 
+  function pluginEntryButton() {
+    return document.querySelector('nav[role="navigation"] button.h-token-nav-row.w-full svg path[d^="M7.94562 14.0277"]')?.closest("button");
+  }
+
+  function labelUnlockedPluginEntry(button) {
+    const labelTextNode = Array.from(button.querySelectorAll("span, div")).reverse()
+      .flatMap((node) => Array.from(node.childNodes))
+      .find((node) => node.nodeType === 3 && /^(插件|Plugins)( - 已解锁| - Unlocked)?$/i.test((node.nodeValue || "").trim()));
+    if (!labelTextNode) return;
+    const current = (labelTextNode.nodeValue || "").trim();
+    labelTextNode.nodeValue = /^Plugins/i.test(current) ? "Plugins - Unlocked" : "插件 - 已解锁";
+  }
+
   function enablePluginEntry() {
     if (!codexPlusSettings().pluginEntryUnlock) return;
-    const buttons = Array.from(document.querySelectorAll("button"));
-    const pluginButton = buttons.find((element) => /^(插件|Plugins)$/i.test((element.textContent || "").trim()));
+    const pluginButton = pluginEntryButton();
     if (!pluginButton) return;
     spoofChatGPTAuthMethod(pluginButton);
     pluginButton.disabled = false;
@@ -388,6 +400,7 @@
     pluginButton.querySelectorAll("*").forEach((node) => {
       node.style.display = "";
     });
+    labelUnlockedPluginEntry(pluginButton);
     const reactPropsKey = Object.keys(pluginButton).find((key) => key.startsWith("__reactProps"));
     if (reactPropsKey) {
       pluginButton[reactPropsKey].disabled = false;
@@ -399,24 +412,42 @@
     }, true);
   }
 
+  function pluginInstallCandidates() {
+    return Array.from(document.querySelectorAll('button:disabled.w-full.justify-center, [role="button"][aria-disabled="true"].cursor-not-allowed'));
+  }
+
+  function installButtonLabel(element) {
+    return (element.textContent || "").trim();
+  }
+
+  function unblockButtonElement(button) {
+    button.disabled = false;
+    button.removeAttribute("disabled");
+    button.removeAttribute("aria-disabled");
+    button.classList.remove("disabled", "opacity-50", "cursor-not-allowed", "pointer-events-none");
+    button.style.pointerEvents = "auto";
+    button.tabIndex = 0;
+    const reactPropsKey = Object.keys(button).find((key) => key.startsWith("__reactProps"));
+    if (reactPropsKey) {
+      button[reactPropsKey].disabled = false;
+      button[reactPropsKey]["aria-disabled"] = false;
+    }
+  }
+
+  function labelForcedInstallButton(button) {
+    const textNode = Array.from(button.childNodes).find((node) => node.nodeType === 3 && (/^安装\s/.test((node.nodeValue || "").trim()) || /^Install\s/.test((node.nodeValue || "").trim()) || (node.nodeValue || "").trim() === "强制安装"));
+    if (textNode) {
+      textNode.nodeValue = "强制安装";
+    }
+  }
+
   function unblockPluginInstallButtons() {
     if (!codexPlusSettings().forcePluginInstall) return;
-    const unavailableLabels = ["App unavailable", "应用不可用"];
-    const pageText = document.body.textContent || "";
-    if (!unavailableLabels.some((label) => pageText.includes(label))) return;
-    document.querySelectorAll("button:disabled").forEach((button) => {
-      const text = (button.textContent || "").trim();
-      if (!/^安装\s/.test(text) && !/^Install\s/.test(text)) return;
-      button.disabled = false;
-      button.removeAttribute("disabled");
-      button.removeAttribute("aria-disabled");
-      button.classList.remove("disabled", "opacity-50", "cursor-not-allowed", "pointer-events-none");
-      button.style.pointerEvents = "auto";
-      const reactPropsKey = Object.keys(button).find((key) => key.startsWith("__reactProps"));
-      if (reactPropsKey) {
-        button[reactPropsKey].disabled = false;
-        button[reactPropsKey]["aria-disabled"] = false;
-      }
+    pluginInstallCandidates().forEach((button) => {
+      const text = installButtonLabel(button);
+      if (!/^安装\s/.test(text) && !/^Install\s/.test(text) && text !== "强制安装") return;
+      unblockButtonElement(button);
+      labelForcedInstallButton(button);
     });
   }
 
@@ -430,26 +461,21 @@
       if (cachedSessionRows.length > 0) return cachedSessionRows;
     }
 
-    const codexThreads = Array.from(document.querySelectorAll('[data-app-action-sidebar-thread-id]'));
-    if (codexThreads.length > 0) {
-      cachedSessionRows = codexThreads;
-      cachedSessionRowsAt = now;
-      return cachedSessionRows;
-    }
-
-    const candidates = Array.from(document.querySelectorAll("a[href*='session'], a[href*='conversation'], a[href*='thread'], button[data-testid*='session'], button[data-testid*='conversation'], button[data-testid*='thread'], [role='button'][data-testid*='session'], [role='button'][data-testid*='conversation'], [role='button'][data-testid*='thread'], li[data-testid*='session'], li[data-testid*='conversation'], li[data-testid*='thread']"));
-    cachedSessionRows = candidates.filter((element) => {
-      const text = (element.textContent || "").trim();
-      const href = element.getAttribute("href") || "";
-      const testId = element.getAttribute("data-testid") || "";
-      const hasSessionHint = /session|conversation|thread/i.test(href + " " + testId);
-      return text.length > 0 && text.length < 200 && hasSessionHint;
-    });
+    cachedSessionRows = Array.from(document.querySelectorAll('[data-app-action-sidebar-thread-id]'));
     cachedSessionRowsAt = now;
     return cachedSessionRows;
   }
 
+  function archivePageHintVisible() {
+    if (window.location.href.includes("archive")) return true;
+    if (document.querySelector('[data-codex-archive-page-row="true"], [data-codex-archive-delete-all]')) return true;
+    const archiveNav = document.querySelector('button[aria-label="已归档对话"], button[aria-label="Archived conversations"]');
+    if (archiveNav?.className?.includes?.("bg-token-list-hover-background")) return true;
+    return !!Array.from(document.querySelectorAll("h1, h2, h3")).find((element) => (element.textContent || "").trim() === "已归档对话");
+  }
+
   function archivedPageRows() {
+    if (!archivePageHintVisible()) return [];
     const rows = Array.from(document.querySelectorAll("button")).filter((button) => (button.textContent || "").trim() === "取消归档").map((button) => button.closest(".flex.w-full.items-center.justify-between") || button.parentElement).filter(Boolean);
     rows.forEach((row) => {
       row.dataset.codexArchivePageRow = "true";
@@ -459,15 +485,17 @@
   }
 
   function archivedSessionRows() {
+    if (!archivePageHintVisible()) return [];
     return sessionRows().filter((row) => row.querySelector('button[aria-label="取消归档对话"]') || row.outerHTML.includes("取消归档") || row.outerHTML.includes("unarchive"));
   }
 
   function archivedRows() {
+    if (!archivePageHintVisible()) return [];
     return [...archivedSessionRows(), ...archivedPageRows()];
   }
 
   function archivedPageVisible() {
-    return archivedRows().length > 0 || window.location.href.includes("archive") || (document.body.textContent || "").includes("已归档对话");
+    return archivePageHintVisible() && archivedRows().length > 0;
   }
 
   function sessionRefFromRow(row) {
@@ -483,7 +511,7 @@
 
   async function postJson(path, payload) {
     if (!window.__codexSessionDeleteBridge) {
-      return { status: "failed", message: "Delete bridge unavailable. Restart the launcher." };
+      return { status: "failed", message: "删除桥接不可用，请重启启动器" };
     }
     return await window.__codexSessionDeleteBridge(path, payload);
   }
@@ -498,7 +526,7 @@
       undo.textContent = "撤销";
       undo.addEventListener("click", async () => {
         const result = await postJson("/undo", { undo_token: undoToken });
-        toast.textContent = result.message || "Undo finished";
+        toast.textContent = result.message || "撤销完成";
         setTimeout(() => toast.remove(), 5000);
       });
       toast.appendChild(undo);
@@ -613,9 +641,9 @@
       const result = await postJson("/delete", ref);
       if (result.status === "server_deleted" || result.status === "local_deleted") {
         removeDeletedRow(row, button, ref);
-        showToast(result.message || "Deleted", result.undo_token);
+        showToast(result.message || "删除成功", result.undo_token);
       } else {
-        showToast(result.message || "Delete failed", null);
+        showToast(result.message || "删除失败", null);
       }
     });
   }
@@ -774,16 +802,16 @@
       event.stopImmediatePropagation?.();
       const ref = await resolveArchivedThread(row);
       if (!ref.session_id) {
-        showToast("Delete failed: archived session id not found", null);
+        showToast("删除失败：未找到归档会话 ID", null);
         return;
       }
       if (!(await confirmDelete(ref.title))) return;
       const result = await postJson("/delete", ref);
       if (result.status === "server_deleted" || result.status === "local_deleted") {
         row.remove();
-        showToast(result.message || "Deleted", result.undo_token);
+        showToast(result.message || "删除成功", result.undo_token);
       } else {
-        showToast(result.message || "Delete failed", null);
+        showToast(result.message || "删除失败", null);
       }
     }, true);
     unarchiveButton.insertAdjacentElement("afterend", button);
@@ -869,16 +897,33 @@
     requestAnimationFrame(() => runScanStep(scanDeferred));
   }
 
+  function isExtensionUiNode(node) {
+    return !!node?.closest?.(".codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, #codex-plus-menu");
+  }
+
+  const scanRelevantSelector = '[data-app-action-sidebar-thread-id], [data-codex-archive-page-row="true"], [data-codex-archive-delete-all], .app-header-tint, button[aria-label="已归档对话"], button[aria-label="Archived conversations"], button:disabled.w-full.justify-center, [role="button"][aria-disabled="true"].cursor-not-allowed';
+
+  function isScanRelevantNode(node) {
+    if (node.nodeType !== 1) return false;
+    if (isExtensionUiNode(node)) return false;
+    return !!node.matches?.(scanRelevantSelector) || !!node.closest?.(scanRelevantSelector) || !!node.querySelector?.(scanRelevantSelector);
+  }
+
+  function isChatContentMutation(mutation) {
+    const target = mutation.target;
+    if (target?.closest?.('[data-message-author-role], [data-testid="conversation-turn"], main .prose')) {
+      return !Array.from(mutation.addedNodes).some(isScanRelevantNode) && !Array.from(mutation.removedNodes).some(isScanRelevantNode);
+    }
+    return false;
+  }
+
   function shouldScheduleScan(mutations) {
     if (!mutations) return true;
     return mutations.some((mutation) => {
+      if (isChatContentMutation(mutation)) return false;
       const target = mutation.target;
-      if (target?.closest?.(".codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, #codex-plus-menu")) return false;
-      return Array.from(mutation.addedNodes).some((node) => {
-        if (node.nodeType !== 1) return false;
-        if (node.closest?.(".codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, #codex-plus-menu")) return false;
-        return true;
-      }) || Array.from(mutation.removedNodes).some((node) => node.nodeType === 1);
+      if (isExtensionUiNode(target)) return false;
+      return Array.from(mutation.addedNodes).some((node) => node.nodeType === 1 && !isExtensionUiNode(node)) || Array.from(mutation.removedNodes).some((node) => node.nodeType === 1);
     });
   }
 

@@ -153,6 +153,39 @@ def test_find_archived_codex_thread_by_title_ignores_active_threads(tmp_path):
     assert session is None
 
 
+def test_delete_codex_thread_schema_reports_rollout_delete_failure(tmp_path, monkeypatch):
+    db_path = tmp_path / "state_5.sqlite"
+    rollout_path = tmp_path / "rollout.jsonl"
+    rollout_path.write_text('{"type":"message"}\n', encoding="utf-8")
+    create_codex_thread_db(db_path, rollout_path)
+    adapter = SQLiteStorageAdapter(db_path, BackupStore(tmp_path / "backups"))
+
+    def fail_unlink(self, missing_ok=False):
+        if self == rollout_path:
+            raise PermissionError("Access is denied")
+        return original_unlink(self, missing_ok=missing_ok)
+
+    original_unlink = type(rollout_path).unlink
+    monkeypatch.setattr(type(rollout_path), "unlink", fail_unlink)
+
+    result = adapter.delete_local(SessionRef(session_id="t1", title="Codex Thread"))
+
+    assert result.status == DeleteStatus.FAILED
+    assert "本地数据库已删除" in result.message
+    assert "文件删除失败" in result.message
+    assert "Access is denied" in result.message
+
+
+def test_delete_local_session_uses_chinese_success_message(tmp_path):
+    db_path = tmp_path / "codex.sqlite"
+    create_supported_db(db_path)
+    adapter = SQLiteStorageAdapter(db_path, BackupStore(tmp_path / "backups"))
+
+    result = adapter.delete_local(SessionRef(session_id="s1", title="First"))
+
+    assert result.message == "已从本地存储删除"
+
+
 def test_delete_unsupported_schema_fails(tmp_path):
     db_path = tmp_path / "unknown.sqlite"
     with sqlite3.connect(db_path) as db:

@@ -108,8 +108,15 @@ class SQLiteStorageAdapter:
         db.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
         db.commit()
 
+        file_delete_errors = []
         for file_backup in file_backups:
-            Path(file_backup["path"]).unlink(missing_ok=True)
+            path = Path(file_backup["path"])
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:
+                file_delete_errors.append(f"{path}: {exc}")
+        if file_delete_errors:
+            return DeleteResult(DeleteStatus.FAILED, thread_id, "本地数据库已删除，但文件删除失败：" + "; ".join(file_delete_errors), undo_token=token, backup_path=str(self.backup_store.path_for(token)))
 
         return self._local_deleted(thread_id, token)
 
@@ -154,7 +161,7 @@ class SQLiteStorageAdapter:
         return DeleteResult(
             DeleteStatus.LOCAL_DELETED,
             session_id,
-            "Deleted from local storage only",
+            "已从本地存储删除",
             undo_token=token,
             backup_path=str(self.backup_store.path_for(token)),
         )

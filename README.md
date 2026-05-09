@@ -19,6 +19,7 @@ Codex++ 是一个面向 Codex App 的外部增强启动器。它不修改 Codex 
   - [图形菜单安装/卸载](#图形菜单安装卸载)
   - [命令行安装](#命令行安装)
   - [命令行卸载](#命令行卸载)
+- [自动更新](#自动更新)
 - [macOS 使用](#macos-使用)
   - [安装](#安装)
   - [卸载](#卸载)
@@ -40,6 +41,7 @@ Codex++ 是一个面向 Codex App 的外部增强启动器。它不修改 Codex 
   - 会话删除
 - 支持 Windows 快捷方式安装/卸载
 - 支持 macOS 生成 `/Applications/Codex++.app`
+- 支持基于 GitHub Release 检查和更新 Codex++
 
 ## 痛点
 
@@ -118,7 +120,8 @@ setup.bat
 ```text
 [1] Install Codex++
 [2] Uninstall Codex++
-[3] Exit
+[3] Update Codex++
+[4] Exit
 ```
 
 ### 命令行安装
@@ -152,6 +155,38 @@ python -m codex_session_delete remove
 ```bash
 python -m codex_session_delete remove --remove-data
 ```
+
+## 自动更新
+
+Codex++ 会在启动时检查 GitHub Release。如果发现比本地版本更新的 Release，会在控制台提示版本号、Release 地址和更新命令；检查失败不会影响 Codex++ 启动。
+
+手动检查更新：
+
+```bash
+python -m codex_session_delete check-update
+```
+
+从最新 GitHub Release 更新：
+
+```bash
+python -m codex_session_delete update
+```
+
+更新流程：
+
+1. 请求 `https://api.github.com/repos/BigPizzaV3/CodexPlusPlus/releases/latest`。
+2. 比较最新 Release tag 与本地版本。
+3. 优先下载 Release 中的 `.whl` asset。
+4. 执行 `python -m pip install --upgrade <wheel>`。
+5. 自动重新执行 `python -m codex_session_delete setup`，刷新快捷方式、Windows 卸载项或 macOS app bundle。
+
+发布新版本时，请在 GitHub Release 里附加 wheel 文件，例如：
+
+```bash
+python -m build
+```
+
+然后把 `dist/codex_session_delete-<version>-py3-none-any.whl` 上传到对应 Release。
 
 ## macOS 使用
 

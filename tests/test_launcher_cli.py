@@ -265,6 +265,27 @@ def test_cli_launch_runs_launcher_cleanup_before_injection(monkeypatch):
     assert events == ["cleanup", "launch", "wait"]
 
 
+def test_cli_launch_checks_update_before_injection(monkeypatch):
+    events = []
+    monkeypatch.setattr(cli, "stop_existing_windows_launchers", lambda: events.append("cleanup"))
+    monkeypatch.setattr(cli, "maybe_print_update_notice", lambda: events.append("check-update"))
+    monkeypatch.setattr(cli, "launch_and_inject", lambda *args: events.append("launch") or (FakeServer(), None))
+    monkeypatch.setattr(cli, "wait_for_shutdown", lambda server, proc: events.append("wait"))
+
+    exit_code = cli.main(["launch"])
+
+    assert exit_code == 0
+    assert events == ["cleanup", "check-update", "launch", "wait"]
+
+
+def test_cli_update_notice_ignores_network_errors(monkeypatch, capsys):
+    monkeypatch.setattr(cli.updater, "check_for_update", lambda: (_ for _ in ()).throw(RuntimeError("offline")))
+
+    cli.maybe_print_update_notice()
+
+    assert capsys.readouterr().out == ""
+
+
 def test_cli_setup_alias_installs_with_default_launcher(monkeypatch):
     calls = []
     monkeypatch.setattr(cli, "install_codex_plus_plus", lambda options: calls.append(options))
@@ -275,6 +296,85 @@ def test_cli_setup_alias_installs_with_default_launcher(monkeypatch):
     assert len(calls) == 1
     assert calls[0].install_root is None
     assert calls[0].launcher_command is None
+
+
+def test_cli_check_update_prints_latest_release(monkeypatch, capsys):
+    class Release:
+        version = "v1.0.5"
+        url = "https://github.com/BigPizzaV3/CodexPlusPlus/releases/tag/v1.0.5"
+        body = "fixes"
+
+    monkeypatch.setattr(cli.updater, "is_source_tree_mode", lambda: False)
+    monkeypatch.setattr(cli.updater, "check_for_update", lambda: Release())
+
+    exit_code = cli.main(["check-update"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "发现新版本 v1.0.5" in output
+    assert "CodexPlusPlus/releases/tag/v1.0.5" in output
+
+
+def test_cli_check_update_reports_current_version(monkeypatch, capsys):
+    monkeypatch.setattr(cli.updater, "check_for_update", lambda: None)
+    monkeypatch.setattr(cli.updater, "is_source_tree_mode", lambda: False)
+
+    exit_code = cli.main(["check-update"])
+
+    assert exit_code == 0
+    assert "当前已是最新版本" in capsys.readouterr().out
+
+
+def test_cli_check_update_reports_source_tree_migration_mode(monkeypatch, capsys):
+    monkeypatch.setattr(cli.updater, "is_source_tree_mode", lambda: True)
+    monkeypatch.setattr(cli.updater, "check_for_update", lambda: (_ for _ in ()).throw(AssertionError("should not check release version")))
+
+    exit_code = cli.main(["check-update"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "源码目录运行" in output
+    assert "update" in output
+
+
+def test_cli_update_migrates_source_tree_to_release_install(monkeypatch, capsys):
+    class Release:
+        version = "v1.0.5"
+        url = "https://github.com/BigPizzaV3/CodexPlusPlus/releases/tag/v1.0.5"
+        body = "fixes"
+        asset_name = "CodexPlusPlus.zip"
+
+    calls = []
+    monkeypatch.setattr(cli.updater, "is_source_tree_mode", lambda: True)
+    monkeypatch.setattr(cli.updater, "fetch_latest_release", lambda: Release())
+    monkeypatch.setattr(cli.updater, "perform_update", lambda release: calls.append(release) or object())
+
+    exit_code = cli.main(["update"])
+
+    assert exit_code == 0
+    assert calls[0].version == "v1.0.5"
+    output = capsys.readouterr().out
+    assert "源码目录运行" in output
+    assert "迁移到 Release 安装" in output
+    assert "更新完成" in output
+
+
+def test_cli_update_installs_latest_release(monkeypatch, tmp_path, capsys):
+    class Release:
+        version = "v1.0.5"
+        url = "https://github.com/BigPizzaV3/CodexPlusPlus/releases/tag/v1.0.5"
+        body = "fixes"
+
+    calls = []
+    monkeypatch.setattr(cli.updater, "is_source_tree_mode", lambda: False)
+    monkeypatch.setattr(cli.updater, "check_for_update", lambda: Release())
+    monkeypatch.setattr(cli.updater, "perform_update", lambda release: calls.append(release) or object())
+
+    exit_code = cli.main(["update"])
+
+    assert exit_code == 0
+    assert calls[0].version == "v1.0.5"
+    assert "更新完成" in capsys.readouterr().out
 
 
 def test_cli_remove_alias_uninstalls_with_default_options(monkeypatch):

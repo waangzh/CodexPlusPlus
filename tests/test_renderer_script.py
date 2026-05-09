@@ -20,8 +20,15 @@ def test_renderer_script_contains_hover_delete_contract():
 
 def test_renderer_script_supports_codex_sidebar_thread_attributes():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
-    assert "data-app-action-sidebar-thread-id" in text
+    start = text.index("function sessionRows")
+    end = text.index("\n\n  function archivePageHintVisible", start)
+    session_rows_code = text[start:end]
+    assert "data-app-action-sidebar-thread-id" in session_rows_code
     assert "data-thread-title" in text
+    assert "a[href*='session']" not in session_rows_code
+    assert "conversation" not in session_rows_code
+    assert "thread" not in session_rows_code.replace("data-app-action-sidebar-thread-id", "")
+    assert "hasSessionHint" not in session_rows_code
 
 
 def test_renderer_script_positions_delete_button_without_affecting_layout():
@@ -36,23 +43,43 @@ def test_renderer_script_positions_delete_button_without_affecting_layout():
 
 def test_renderer_script_enables_plugin_entry_for_api_key_users():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
-    assert "enablePluginEntry" in text
-    assert "Plugins" in text
-    assert "disabled = false" in text
-    assert "removeAttribute(\"disabled\")" in text
+    start = text.index("function pluginEntryButton")
+    end = text.index("\n\n  function unblockPluginInstallButtons", start)
+    plugin_entry_code = text[start:end]
+    assert "enablePluginEntry" in plugin_entry_code
+    assert "pluginEntryButton" in plugin_entry_code
+    assert "nav[role=\"navigation\"] button.h-token-nav-row.w-full" in plugin_entry_code
+    assert "svg path[d^=\"M7.94562 14.0277\"]" in plugin_entry_code
+    assert "document.querySelectorAll(\"button\")" not in plugin_entry_code
+    assert "disabled = false" in plugin_entry_code
+    assert "removeAttribute(\"disabled\")" in plugin_entry_code
     assert "setAuthMethod(\"chatgpt\")" in text
+    assert "插件 - 已解锁" in plugin_entry_code
+    assert "Plugins - Unlocked" in plugin_entry_code
+    assert "labelUnlockedPluginEntry" in plugin_entry_code
+    assert "childNodes" in plugin_entry_code
+    assert "node.nodeType === 3" in plugin_entry_code
+    assert "labelTextNode.nodeValue" in plugin_entry_code
+    assert ".textContent = /^Plugins" not in plugin_entry_code
     assert "__reactFiber" in text
     assert "/skills/plugins" not in text
     assert "skillProps.onClick" not in text
 
 
-def test_renderer_script_unblocks_connector_unavailable_plugin_install_buttons():
+def test_renderer_script_unblocks_connector_unavailable_plugin_install_buttons_without_full_body_text_scan():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
-    assert "unblockPluginInstallButtons" in text
-    assert "App unavailable" in text
-    assert "document.body.textContent" in text
-    assert "button.disabled = false" in text
-    assert "removeAttribute(\"aria-disabled\")" in text
+    start = text.index("function pluginInstallCandidates")
+    end = text.index("\n  let cachedSessionRows", start)
+    plugin_unlock_code = text[start:end]
+    assert "unblockPluginInstallButtons" in plugin_unlock_code
+    assert "pluginInstallCandidates" in plugin_unlock_code
+    assert "button:disabled.w-full.justify-center" in plugin_unlock_code
+    assert "[role=\"button\"][aria-disabled=\"true\"].cursor-not-allowed" in plugin_unlock_code
+    assert "document.body.textContent" not in plugin_unlock_code
+    assert "button.disabled = false" in plugin_unlock_code
+    assert "removeAttribute(\"aria-disabled\")" in plugin_unlock_code
+    assert "labelForcedInstallButton" in plugin_unlock_code
+    assert "强制安装" in plugin_unlock_code
 
 
 def test_renderer_script_debounces_mutation_observer_scan():
@@ -74,6 +101,37 @@ def test_renderer_script_debounces_mutation_observer_scan():
     assert "new MutationObserver(scan)" not in text
     assert "scan();" in text
     assert "  scan();\n  window.__codexSessionDeleteObserver" in text
+
+
+def test_renderer_script_ignores_chat_content_mutations_before_scheduling_scan():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+    start = text.index("function isExtensionUiNode")
+    end = text.index("\n\n  function runScheduledScan", start)
+    should_schedule_code = text[start:end]
+    assert "isChatContentMutation" in should_schedule_code
+    assert "data-message-author-role" in should_schedule_code
+    assert "data-testid=\"conversation-turn\"" in should_schedule_code
+    assert "main .prose" in should_schedule_code
+    assert "if (isChatContentMutation(mutation)) return false" in should_schedule_code
+    should_start = text.index("function shouldScheduleScan")
+    should_end = text.index("\n\n  function runScheduledScan", should_start)
+    should_schedule_only = text[should_start:should_end]
+    assert "node.nodeType === 1 && !isExtensionUiNode(node)" in should_schedule_only
+    assert "Array.from(mutation.addedNodes).some(isScanRelevantNode)" not in should_schedule_only
+    assert "data-app-action-sidebar-thread-id" in should_schedule_code
+    assert "app-header-tint" in should_schedule_code
+
+
+def test_renderer_script_chat_filter_keeps_relevant_node_escape_hatch():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+    start = text.index("const scanRelevantSelector")
+    end = text.index("\n\n  function isChatContentMutation", start)
+    relevant_code = text[start:end]
+    assert "node.matches?.(scanRelevantSelector)" in relevant_code
+    assert "node.querySelector?.(scanRelevantSelector)" in relevant_code
+    assert "button[aria-label=\"已归档对话\"]" in relevant_code
+    assert "button:disabled.w-full.justify-center" in relevant_code
+    assert "[role=\"button\"][aria-disabled=\"true\"].cursor-not-allowed" in relevant_code
 
 
 def test_renderer_script_clears_focus_and_removes_deleted_rows():
@@ -134,9 +192,20 @@ def test_renderer_script_sidebar_delete_opens_on_pointerup_when_click_is_unrelia
 
 
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+    archive_visible_start = text.index("function archivedPageVisible")
+    archive_visible_end = text.index("\n\n  function sessionRefFromRow", archive_visible_start)
+    archive_visible_code = text[archive_visible_start:archive_visible_end]
+    assert "archivePageHintVisible" in text
+    assert "button[aria-label=\"已归档对话\"]" in text
+    assert "button[aria-label=\"Archived conversations\"]" in text
+    assert "bg-token-list-hover-background" in text
+    assert "archivedPageVisible" in text
+    assert "document.body.textContent" not in archive_visible_code
     assert "archivedSessionRows" in text
     assert "archivedPageRows" in text
     assert "installArchivedDeleteAllButton" in text
+    assert "if (!archivePageHintVisible()) return []" in text
+    assert "if (!archivePageHintVisible())" in text
     assert "删除全部归档" in text
     assert "deleteArchivedSessions" in text
     assert "attachArchivedPageDeleteButton" in text
@@ -177,6 +246,16 @@ def test_renderer_script_sidebar_delete_opens_on_pointerup_when_click_is_unrelia
     assert "已归档对话" in text
 
 
+def test_renderer_script_uses_chinese_delete_toast_fallbacks():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+    assert "删除成功" in text
+    assert "删除失败" in text
+    assert "撤销完成" in text
+    assert "Delete failed" not in text
+    assert "Deleted\"" not in text
+    assert "Undo finished" not in text
+
+
 def test_renderer_script_does_not_include_fast_mode_patch():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "codexFastModeUnlockVersion" not in text
@@ -191,10 +270,6 @@ def test_renderer_script_does_not_include_fast_mode_patch():
     assert "codex-fast-mode-row" not in text
     assert "setAuthMethod(\"chatgpt\")" in text
     assert "patchFastModeGateOnObject" not in text
-
-
-    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
-    assert "installCodexPlusMenu" in text
     assert "Codex++" in text
     assert "codexPlusVersion = \"1.0.4\"" in text
     assert "Codex++ ${codexPlusVersion}" in text

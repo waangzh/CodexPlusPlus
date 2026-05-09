@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from codex_session_delete import __version__
 from codex_session_delete.app_paths import find_macos_codex_app
 
 ICON_ASSET = Path(__file__).resolve().parent / "assets" / "codex-plus-plus.png"
@@ -42,8 +43,8 @@ def install_macos_app(options: "InstallOptions") -> None:
         "CFBundleName": "Codex++",
         "CFBundleDisplayName": "Codex++",
         "CFBundleIdentifier": "com.bigpizzav3.codexplusplus",
-        "CFBundleVersion": "1.0.4",
-        "CFBundleShortVersionString": "1.0.4",
+        "CFBundleVersion": __version__,
+        "CFBundleShortVersionString": __version__,
         "CFBundlePackageType": "APPL",
         "CFBundleExecutable": EXECUTABLE_NAME,
         "CFBundleIconFile": "codex-plus-plus.png",

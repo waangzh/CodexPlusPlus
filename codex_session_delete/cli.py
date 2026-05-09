@@ -10,6 +10,7 @@ from pathlib import Path
 from codex_session_delete.helper_server import HelperServer
 from codex_session_delete.installers import InstallOptions, install_codex_plus_plus, uninstall_codex_plus_plus
 from codex_session_delete.launcher import launch_and_inject, shutdown_helper
+from codex_session_delete import updater
 from codex_session_delete import watcher
 
 
@@ -53,6 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("watch-enable", help="Re-enable the watcher loop after it was disabled")
     subparsers.add_parser("watch-disable", help="Disable the watcher loop without removing the logon task")
+
+    subparsers.add_parser("check-update", help="Check GitHub Releases for a newer Codex++ version")
+    subparsers.add_parser("update", help="Update Codex++ from the latest GitHub Release")
 
     add_launch_arguments(parser)
     return parser
@@ -130,6 +134,7 @@ def stop_existing_windows_launchers() -> None:
 
 def run_launch(args: argparse.Namespace) -> int:
     stop_existing_windows_launchers()
+    maybe_print_update_notice()
     try:
         server, codex_proc = launch_and_inject(args.app_dir, args.db, args.backup_dir, args.debug_port, args.helper_port)
     except Exception as exc:
@@ -138,6 +143,50 @@ def run_launch(args: argparse.Namespace) -> int:
     print(f"Codex session delete helper running on http://127.0.0.1:{server.port}")
     print("Keep this terminal open while using the delete buttons. Press Ctrl+C to stop.")
     wait_for_shutdown(server, codex_proc)
+    return 0
+
+
+def print_release_notice(release: updater.Release) -> None:
+    print(f"发现新版本 {release.version}: {release.url}")
+    asset_name = getattr(release, "asset_name", None)
+    if asset_name:
+        print(f"更新包: {asset_name}")
+    print("运行 `python -m codex_session_delete update` 可从 GitHub Release 更新。")
+
+
+def maybe_print_update_notice() -> None:
+    try:
+        release = updater.check_for_update()
+    except Exception:
+        return
+    if release is not None:
+        print_release_notice(release)
+
+
+def run_check_update() -> int:
+    if updater.is_source_tree_mode():
+        print("检测到当前正在从源码目录运行 Codex++。源码模式不检测 Release 版本；运行 `python -m codex_session_delete update` 可迁移到 Release 安装。")
+        return 0
+    release = updater.check_for_update()
+    if release is None:
+        print("当前已是最新版本。")
+        return 0
+    print_release_notice(release)
+    return 0
+
+
+def run_update() -> int:
+    if updater.is_source_tree_mode():
+        print("检测到当前正在从源码目录运行 Codex++，将迁移到 Release 安装。")
+        release = updater.fetch_latest_release()
+    else:
+        release = updater.check_for_update()
+        if release is None:
+            print("当前已是最新版本。")
+            return 0
+    print_release_notice(release)
+    updater.perform_update(release)
+    print("更新完成。")
     return 0
 
 
@@ -256,6 +305,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "watch-disable":
         watcher.disable_watcher()
         return 0
+    if args.command == "check-update":
+        return run_check_update()
+    if args.command == "update":
+        return run_update()
     return run_launch(args)
 
 

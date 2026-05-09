@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from codex_session_delete.installers import InstallOptions
+from codex_session_delete import __version__
 from codex_session_delete.windows_installer import build_install_shortcut_script, build_uninstall_shortcut_script
 
 
@@ -32,6 +33,7 @@ def test_build_install_shortcut_script_contains_codex_plus_shortcuts(tmp_path):
     assert "$UninstallCommand = 'cmd.exe /c cd /d \"' + $ProjectRoot + '\" && \"' + $Python + '\" -m codex_session_delete uninstall" in script
     assert "--install-root" in script
     assert "QuietUninstallString" in script
+    assert f"DisplayVersion -Value '{__version__}'" in script
 
 
 def test_build_uninstall_shortcut_script_removes_codex_plus_shortcuts(tmp_path):

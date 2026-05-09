@@ -4,6 +4,8 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from codex_session_delete import __version__
+
 if TYPE_CHECKING:
     from codex_session_delete.installers import InstallOptions
 
@@ -67,7 +69,7 @@ $UninstallKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\
 $UninstallCommand = 'cmd.exe /c cd /d "' + $ProjectRoot + '" && "' + $Python + '" -m codex_session_delete uninstall --install-root "' + $InstallRoot + '"'
 New-Item -Path $UninstallKey -Force | Out-Null
 Set-ItemProperty -Path $UninstallKey -Name DisplayName -Value 'Codex++'
-Set-ItemProperty -Path $UninstallKey -Name DisplayVersion -Value '1.0.4'
+Set-ItemProperty -Path $UninstallKey -Name DisplayVersion -Value '{__version__}'
 Set-ItemProperty -Path $UninstallKey -Name Publisher -Value 'BigPizzaV3'
 Set-ItemProperty -Path $UninstallKey -Name DisplayIcon -Value $CodexPlusIcon
 Set-ItemProperty -Path $UninstallKey -Name InstallLocation -Value $ProjectRoot

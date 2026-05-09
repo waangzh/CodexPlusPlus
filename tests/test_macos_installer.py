@@ -3,6 +3,7 @@ import plistlib
 import stat
 
 from codex_session_delete.installers import InstallOptions
+from codex_session_delete import __version__
 from codex_session_delete.macos_installer import install_macos_app, uninstall_macos_app
 
 
@@ -24,6 +25,8 @@ def test_install_macos_app_creates_app_bundle(tmp_path):
     assert plist["CFBundleExecutable"] == "CodexPlusPlus"
     assert plist["CFBundleIdentifier"] == "com.bigpizzav3.codexplusplus"
     assert plist["CFBundleIconFile"] == "codex-plus-plus.png"
+    assert plist["CFBundleVersion"] == __version__
+    assert plist["CFBundleShortVersionString"] == __version__
     assert (app / "Contents" / "Resources" / "codex-plus-plus.png").exists()
 
     script = executable.read_text(encoding="utf-8")
