@@ -26,6 +26,10 @@ def _project_root_expr() -> str:
     return _ps_quote(str(Path(__file__).resolve().parent.parent))
 
 
+def _icon_path_expr() -> str:
+    return _ps_quote(str(Path(__file__).resolve().parent / "assets" / "codex-plus-plus.ico"))
+
+
 def _split_launcher_command(command: str) -> tuple[str, str]:
     prefix = "python "
     if command.startswith(prefix):
@@ -36,26 +40,26 @@ def _split_launcher_command(command: str) -> tuple[str, str]:
 def build_install_shortcut_script(options: "InstallOptions") -> str:
     root = _install_root_expr(options)
     project_root = _project_root_expr()
+    icon_path = _icon_path_expr()
     target, arguments = _split_launcher_command(_launcher_command(options))
     target_expr = "$Pythonw" if target == "python" else _ps_quote(target)
     arguments_expr = _ps_quote(arguments)
     return f"""
 $InstallRoot = {root}
 $ProjectRoot = {project_root}
+$CodexPlusIcon = {icon_path}
 New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
 $ShortcutPath = Join-Path $InstallRoot 'Codex++.lnk'
 $Python = (Get-Command python).Source
 $PythonwCandidate = Join-Path (Split-Path $Python -Parent) 'pythonw.exe'
 $Pythonw = if (Test-Path $PythonwCandidate) {{ $PythonwCandidate }} else {{ $Python }}
-$CodexPackage = Get-ChildItem 'C:\\Program Files\\WindowsApps' -Directory -Filter 'OpenAI.Codex_*_x64__*' -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
-$CodexIcon = if ($CodexPackage) {{ Join-Path $CodexPackage.FullName 'app\\Codex.exe' }} else {{ $Python }}
 $Shell = New-Object -ComObject WScript.Shell
 $Shortcut = $Shell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = {target_expr}
 $Shortcut.Arguments = {arguments_expr}
 $Shortcut.WorkingDirectory = $ProjectRoot
 $Shortcut.Description = 'Launch Codex with Codex++ injection'
-$Shortcut.IconLocation = "$CodexIcon,0"
+$Shortcut.IconLocation = $CodexPlusIcon
 $Shortcut.Save()
 $LegacyUninstallKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Codex++'
 if (Test-Path $LegacyUninstallKey) {{ Remove-Item $LegacyUninstallKey -Force }}
@@ -63,9 +67,9 @@ $UninstallKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\
 $UninstallCommand = 'cmd.exe /c cd /d "' + $ProjectRoot + '" && "' + $Python + '" -m codex_session_delete uninstall --install-root "' + $InstallRoot + '"'
 New-Item -Path $UninstallKey -Force | Out-Null
 Set-ItemProperty -Path $UninstallKey -Name DisplayName -Value 'Codex++'
-Set-ItemProperty -Path $UninstallKey -Name DisplayVersion -Value '1.0.2'
+Set-ItemProperty -Path $UninstallKey -Name DisplayVersion -Value '1.0.3'
 Set-ItemProperty -Path $UninstallKey -Name Publisher -Value 'BigPizzaV3'
-Set-ItemProperty -Path $UninstallKey -Name DisplayIcon -Value $CodexIcon
+Set-ItemProperty -Path $UninstallKey -Name DisplayIcon -Value $CodexPlusIcon
 Set-ItemProperty -Path $UninstallKey -Name InstallLocation -Value $ProjectRoot
 Set-ItemProperty -Path $UninstallKey -Name UninstallString -Value $UninstallCommand
 Set-ItemProperty -Path $UninstallKey -Name QuietUninstallString -Value $UninstallCommand

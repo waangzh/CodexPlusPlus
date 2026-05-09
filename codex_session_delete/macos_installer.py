@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from codex_session_delete.app_paths import find_macos_codex_app
 
+ICON_ASSET = Path(__file__).resolve().parent / "assets" / "codex-plus-plus.png"
+
 if TYPE_CHECKING:
     from codex_session_delete.installers import InstallOptions
 
@@ -40,11 +42,11 @@ def install_macos_app(options: "InstallOptions") -> None:
         "CFBundleName": "Codex++",
         "CFBundleDisplayName": "Codex++",
         "CFBundleIdentifier": "com.bigpizzav3.codexplusplus",
-        "CFBundleVersion": "1.0.2",
-        "CFBundleShortVersionString": "1.0.2",
+        "CFBundleVersion": "1.0.3",
+        "CFBundleShortVersionString": "1.0.3",
         "CFBundlePackageType": "APPL",
         "CFBundleExecutable": EXECUTABLE_NAME,
-        "CFBundleIconFile": "electron.icns",
+        "CFBundleIconFile": "codex-plus-plus.png",
         "LSUIElement": True,
         "LSMinimumSystemVersion": "12.0",
     }
@@ -64,6 +66,9 @@ def uninstall_macos_app(options: "InstallOptions") -> None:
 
 
 def _copy_codex_icon(resources: Path) -> None:
+    if ICON_ASSET.is_file():
+        shutil.copy2(ICON_ASSET, resources / "codex-plus-plus.png")
+        return
     codex_app = find_macos_codex_app()
     if codex_app is None:
         return

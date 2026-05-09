@@ -146,6 +146,12 @@ def test_renderer_script_sidebar_delete_opens_on_pointerup_when_click_is_unrelia
     assert "pointerup" in text
     assert "button.addEventListener(\"pointerup\", openArchivedDeleteAllConfirm, true)" in text
     assert "archivedRefFromRow(row)" in text
+    assert "reactArchivedThreadFromNode" in text
+    assert "archivedThreadFromRow" in text
+    assert "props.archivedThread?.id" in text
+    assert "archivedThread.id || archivedThread.sessionId" in text
+    assert "replace(/\\d{4}年\\d{1,2}月\\d{1,2}日.*$/, \"\")" in text
+    assert "const titleMatches = sessionRows().map(sessionRefFromRow)" not in text
     assert "document.querySelectorAll(\"[data-codex-archive-delete-all]\").forEach((node) => node.remove())" not in text
     assert "const existingButton = document.querySelector(\"[data-codex-archive-delete-all]\")" in text
     assert "if (existingButton?.dataset.codexArchiveDeleteAllVersion === codexArchiveDeleteAllVersion) return" in text

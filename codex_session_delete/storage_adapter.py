@@ -55,8 +55,12 @@ class SQLiteStorageAdapter:
             if self._schema_kind(db) != "codex_threads" or not self._has_columns(db, "threads", {"archived"}):
                 return None
             row = db.execute(
-                "SELECT id, title FROM threads WHERE archived = 1 AND title = ? ORDER BY archived_at DESC LIMIT 1",
-                (title,),
+                """
+                SELECT id, title FROM threads
+                WHERE archived = 1 AND (title = ? OR title LIKE ? OR ? LIKE '%' || title || '%')
+                ORDER BY archived_at DESC LIMIT 1
+                """,
+                (title, f"%{title}%", title),
             ).fetchone()
             return SessionRef(session_id=str(row["id"]), title=str(row["title"] or title)) if row else None
 

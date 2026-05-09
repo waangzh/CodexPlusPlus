@@ -23,6 +23,8 @@ def test_install_macos_app_creates_app_bundle(tmp_path):
     assert plist["CFBundleName"] == "Codex++"
     assert plist["CFBundleExecutable"] == "CodexPlusPlus"
     assert plist["CFBundleIdentifier"] == "com.bigpizzav3.codexplusplus"
+    assert plist["CFBundleIconFile"] == "codex-plus-plus.png"
+    assert (app / "Contents" / "Resources" / "codex-plus-plus.png").exists()
 
     script = executable.read_text(encoding="utf-8")
     assert "python -m codex_session_delete launch" in script

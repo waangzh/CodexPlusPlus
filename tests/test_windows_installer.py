@@ -10,6 +10,7 @@ def test_build_install_shortcut_script_contains_codex_plus_shortcuts(tmp_path):
     script = build_install_shortcut_script(options)
 
     assert "Codex++.lnk" in script
+    assert "codex-plus-plus.ico" in script
     assert "-m codex_session_delete launch" in script
     assert "CreateShortcut" in script
     assert "TargetPath = $Pythonw" in script
@@ -19,9 +20,9 @@ def test_build_install_shortcut_script_contains_codex_plus_shortcuts(tmp_path):
     assert "-EncodedCommand" not in script
     assert "powershell.exe" not in script
     assert "WorkingDirectory = $ProjectRoot" in script
-    assert "OpenAI.Codex_*_x64__*" in script
-    assert "Codex.exe" in script
-    assert "IconLocation = \"$CodexIcon,0\"" in script
+    assert "codex-plus-plus.ico" in script
+    assert "Codex.exe" not in script
+    assert "IconLocation = $CodexPlusIcon" in script
     assert "$Python,0" not in script
     assert str(Path.cwd()) in script
     assert "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\CodexPlusPlus" in script

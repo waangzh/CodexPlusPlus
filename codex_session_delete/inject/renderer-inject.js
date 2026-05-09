@@ -663,12 +663,42 @@
     }
   }
 
+  function reactArchivedThreadFromNode(node) {
+    const reactKey = Object.keys(node).find((key) => key.startsWith("__reactFiber$") || key.startsWith("__reactInternalInstance$"));
+    let fiber = reactKey ? node[reactKey] : null;
+    for (let depth = 0; fiber && depth < 20; depth += 1, fiber = fiber.return) {
+      const props = fiber.memoizedProps || fiber.pendingProps || {};
+      if (props.archivedThread?.id) return props.archivedThread;
+      const childThread = props.children?.props?.archivedThread;
+      if (childThread?.id) return childThread;
+    }
+    return null;
+  }
+
+  function archivedThreadFromRow(row) {
+    for (const node of [row, ...row.querySelectorAll("*")]) {
+      const thread = reactArchivedThreadFromNode(node);
+      if (thread?.id || thread?.sessionId) return thread;
+    }
+    return null;
+  }
+
   function archivedRefFromRow(row) {
+    const archivedThread = archivedThreadFromRow(row);
+    if (archivedThread?.id || archivedThread?.sessionId) {
+      return { session_id: archivedThread.id || archivedThread.sessionId, title: archivedThread.title || row.querySelector(".truncate.text-base")?.textContent?.trim() || "Untitled session" };
+    }
     const sidebarRef = sessionRefFromRow(row);
     if (sidebarRef.session_id) return sidebarRef;
-    const title = (row.querySelector(".truncate.text-base")?.textContent || row.textContent || "Untitled session").replace("取消归档", "").replace("删除", "").trim().slice(0, 160);
-    const titleMatches = sessionRows().map(sessionRefFromRow).filter((ref) => ref.session_id && ref.title && title.includes(ref.title.slice(0, 24)));
-    return titleMatches[0] || { session_id: "", title };
+    const titleNode = row.querySelector(".truncate.text-base, [data-thread-title], a, div");
+    const title = ((titleNode || row).textContent || "Untitled session")
+      .replace("取消归档", "")
+      .replace("删除", "")
+      .replace(/\d{4}年\d{1,2}月\d{1,2}日.*$/, "")
+      .replace(/\s+·\s+.*$/, "")
+      .trim()
+      .slice(0, 160);
+    return { session_id: "", title };
   }
 
   async function resolveArchivedThread(row) {

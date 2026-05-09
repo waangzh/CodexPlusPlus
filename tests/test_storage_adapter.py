@@ -129,6 +129,19 @@ def test_find_archived_codex_thread_by_title(tmp_path):
     assert session == SessionRef(session_id="t1", title="Codex Thread")
 
 
+def test_find_archived_codex_thread_by_title_matches_rendered_archive_card_text(tmp_path):
+    db_path = tmp_path / "state_5.sqlite"
+    rollout_path = tmp_path / "archived.jsonl"
+    create_codex_thread_db(db_path, rollout_path)
+    with sqlite3.connect(db_path) as db:
+        db.execute("UPDATE threads SET archived = 1, archived_at = 123 WHERE id = 't1'")
+    adapter = SQLiteStorageAdapter(db_path, BackupStore(tmp_path / "backups"))
+
+    session = adapter.find_archived_thread_by_title("Codex Thread 2026年5月9日，1:19 · RustGUI")
+
+    assert session == SessionRef(session_id="t1", title="Codex Thread")
+
+
 def test_find_archived_codex_thread_by_title_ignores_active_threads(tmp_path):
     db_path = tmp_path / "state_5.sqlite"
     rollout_path = tmp_path / "active.jsonl"
@@ -140,6 +153,7 @@ def test_find_archived_codex_thread_by_title_ignores_active_threads(tmp_path):
     assert session is None
 
 
+def test_delete_unsupported_schema_fails(tmp_path):
     db_path = tmp_path / "unknown.sqlite"
     with sqlite3.connect(db_path) as db:
         db.execute("CREATE TABLE unrelated (id TEXT PRIMARY KEY)")
