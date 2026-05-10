@@ -464,6 +464,7 @@
 
   let cachedSessionRows = [];
   let cachedSessionRowsAt = 0;
+  const locallyDeletedSessionIds = new Set();
 
   function sessionRows(forceRefresh = false) {
     const now = Date.now();
@@ -520,6 +521,36 @@
     return { session_id: sessionId, title };
   }
 
+  function normalizedSessionId(sessionId) {
+    return String(sessionId || "").replace(/^local:/, "");
+  }
+
+  function rememberDeletedSession(ref) {
+    const sessionId = normalizedSessionId(ref?.session_id);
+    if (!sessionId) return;
+    locallyDeletedSessionIds.add(sessionId);
+    locallyDeletedSessionIds.add(`local:${sessionId}`);
+  }
+
+  function forgetDeletedSession(sessionId) {
+    const normalized = normalizedSessionId(sessionId);
+    if (!normalized) return;
+    locallyDeletedSessionIds.delete(normalized);
+    locallyDeletedSessionIds.delete(`local:${normalized}`);
+  }
+
+  function isLocallyDeletedSession(ref) {
+    return locallyDeletedSessionIds.has(normalizedSessionId(ref?.session_id)) || locallyDeletedSessionIds.has(String(ref?.session_id || ""));
+  }
+
+  function pruneLocallyDeletedSessionRows() {
+    sessionRows(true).forEach((row) => {
+      const ref = sessionRefFromRow(row);
+      if (isLocallyDeletedSession(ref)) row.remove();
+    });
+    cachedSessionRows = cachedSessionRows.filter((row) => row.isConnected);
+  }
+
   async function postJson(path, payload) {
     if (!window.__codexSessionDeleteBridge) {
       return { status: "failed", message: "删除桥接不可用，请重启启动器" };
@@ -537,6 +568,10 @@
       undo.textContent = "撤销";
       undo.addEventListener("click", async () => {
         const result = await postJson("/undo", { undo_token: undoToken });
+        if (result.status === "undone") {
+          forgetDeletedSession(result.session_id);
+          scan();
+        }
         toast.textContent = result.message || "撤销完成";
         setTimeout(() => toast.remove(), 5000);
       });
@@ -662,9 +697,11 @@
   }
 
   function removeDeletedRow(row, button, ref) {
+    rememberDeletedSession(ref);
     releaseDeleteFocus(row, button);
     const shouldReload = isCurrentSessionRow(row, ref);
     row.remove();
+    cachedSessionRows = cachedSessionRows.filter((cachedRow) => cachedRow !== row && cachedRow.isConnected);
     if (shouldReload) {
       window.location.reload();
     }
@@ -930,6 +967,7 @@
   function scanDeferred() {
     enablePluginEntry();
     unblockPluginInstallButtons();
+    pruneLocallyDeletedSessionRows();
     sessionRows().forEach(tryAttachButton);
     updateDeleteButtonOffsets();
     archivedPageRows().forEach(attachArchivedPageDeleteButton);

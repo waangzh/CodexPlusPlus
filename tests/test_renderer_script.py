@@ -138,9 +138,14 @@ def test_renderer_script_clears_focus_and_removes_deleted_rows():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "removeDeletedRow(row, button, ref)" in text
     assert "function releaseDeleteFocus" in text
+    assert "const locallyDeletedSessionIds = new Set()" in text
+    assert "function rememberDeletedSession" in text
+    assert "function pruneLocallyDeletedSessionRows" in text
+    assert "pruneLocallyDeletedSessionRows()" in text
     assert "releaseDeleteFocus(row, button)" in text
     assert "button.blur()" in text
     assert "document.activeElement.blur()" in text
+    assert "rememberDeletedSession(ref)" in text
     assert "row.remove()" in text
     assert "row.style.display = \"none\"" not in text
 
