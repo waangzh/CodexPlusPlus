@@ -66,6 +66,9 @@
         pointer-events: none;
       }
       .codex-delete-toast button { margin-left: 10px; pointer-events: auto; }
+      [data-codex-locally-deleted="true"] {
+        display: none !important;
+      }
       .codex-delete-confirm-popover {
         position: fixed;
         z-index: 2147483200;
@@ -493,12 +496,12 @@
       row.dataset.codexArchivePageRow = "true";
       row.setAttribute("data-codex-archive-page-row", "true");
     });
-    return rows;
+    return rows.filter((row) => row.dataset.codexLocallyDeleted !== "true");
   }
 
   function archivedSessionRows() {
     if (!archivePageHintVisible()) return [];
-    return sessionRows().filter((row) => row.querySelector('button[aria-label="取消归档对话"]') || row.outerHTML.includes("取消归档") || row.outerHTML.includes("unarchive"));
+    return sessionRows().filter((row) => row.dataset.codexLocallyDeleted !== "true" && (row.querySelector('button[aria-label="取消归档对话"]') || row.outerHTML.includes("取消归档") || row.outerHTML.includes("unarchive")));
   }
 
   function archivedRows() {
@@ -543,10 +546,24 @@
     return locallyDeletedSessionIds.has(normalizedSessionId(ref?.session_id)) || locallyDeletedSessionIds.has(String(ref?.session_id || ""));
   }
 
+  function hideDeletedRow(row) {
+    row.dataset.codexLocallyDeleted = "true";
+    row.setAttribute("data-codex-locally-deleted", "true");
+  }
+
+  function showRestoredRow(row) {
+    delete row.dataset.codexLocallyDeleted;
+    row.removeAttribute("data-codex-locally-deleted");
+  }
+
   function pruneLocallyDeletedSessionRows() {
     sessionRows(true).forEach((row) => {
       const ref = sessionRefFromRow(row);
-      if (isLocallyDeletedSession(ref)) row.remove();
+      if (isLocallyDeletedSession(ref)) {
+        hideDeletedRow(row);
+      } else if (row.dataset.codexLocallyDeleted === "true") {
+        showRestoredRow(row);
+      }
     });
     cachedSessionRows = cachedSessionRows.filter((row) => row.isConnected);
   }
@@ -699,11 +716,11 @@
   function removeDeletedRow(row, button, ref) {
     rememberDeletedSession(ref);
     releaseDeleteFocus(row, button);
-    const shouldReload = isCurrentSessionRow(row, ref);
-    row.remove();
-    cachedSessionRows = cachedSessionRows.filter((cachedRow) => cachedRow !== row && cachedRow.isConnected);
-    if (shouldReload) {
-      window.location.reload();
+    const shouldLeaveCurrentSession = isCurrentSessionRow(row, ref);
+    hideDeletedRow(row);
+    cachedSessionRows = cachedSessionRows.filter((cachedRow) => cachedRow.isConnected);
+    if (shouldLeaveCurrentSession) {
+      window.location.assign(new URL("/", window.location.href).href);
     }
   }
 
@@ -866,10 +883,12 @@
       if (!ref.session_id) continue;
       const result = await postJson("/delete", ref);
       if (result.status === "server_deleted" || result.status === "local_deleted") {
-        row.remove();
+        rememberDeletedSession(ref);
+        hideDeletedRow(row);
         deleted += 1;
       }
     }
+    scan();
     showToast(`已删除 ${deleted} 个归档会话`, null);
   }
 
@@ -898,7 +917,9 @@
       if (!(await confirmDelete(ref.title, button))) return;
       const result = await postJson("/delete", ref);
       if (result.status === "server_deleted" || result.status === "local_deleted") {
-        row.remove();
+        rememberDeletedSession(ref);
+        hideDeletedRow(row);
+        scan();
         showToast(result.message || "删除成功", result.undo_token);
       } else {
         showToast(result.message || "删除失败", null);

@@ -134,7 +134,7 @@ def test_renderer_script_chat_filter_keeps_relevant_node_escape_hatch():
     assert "[role=\"button\"][aria-disabled=\"true\"].cursor-not-allowed" in relevant_code
 
 
-def test_renderer_script_clears_focus_and_removes_deleted_rows():
+def test_renderer_script_clears_focus_and_hides_deleted_rows_without_detaching_react_nodes():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "removeDeletedRow(row, button, ref)" in text
     assert "function releaseDeleteFocus" in text
@@ -146,8 +146,15 @@ def test_renderer_script_clears_focus_and_removes_deleted_rows():
     assert "button.blur()" in text
     assert "document.activeElement.blur()" in text
     assert "rememberDeletedSession(ref)" in text
-    assert "row.remove()" in text
-    assert "row.style.display = \"none\"" not in text
+    assert "function hideDeletedRow" in text
+    assert "function showRestoredRow" in text
+    assert "data-codex-locally-deleted" in text
+    assert "hideDeletedRow(row)" in text
+    assert "showRestoredRow(row)" in text
+    assert "row.removeAttribute(\"data-codex-locally-deleted\")" in text
+    remove_deleted_start = text.index("function removeDeletedRow")
+    remove_deleted_end = text.index("\n\n  function updateDeleteButtonOffsets", remove_deleted_start)
+    assert "row.remove()" not in text[remove_deleted_start:remove_deleted_end]
 
 
 def test_renderer_script_uses_in_page_confirm_and_stops_early_pointer_events():
@@ -166,11 +173,12 @@ def test_renderer_script_uses_in_page_confirm_and_stops_early_pointer_events():
     assert "\"pointerdown\", \"mousedown\", \"mouseup\", \"touchstart\"" in text
 
 
-def test_renderer_script_reloads_after_deleting_current_session():
+def test_renderer_script_leaves_deleted_current_session():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
     assert "isCurrentSessionRow" in text
     assert "window.location.href.includes(ref.session_id)" in text
-    assert "window.location.reload()" in text
+    assert "window.location.assign(new URL(\"/\", window.location.href).href)" in text
+    assert "window.location.reload()" not in text
 
 
 def test_renderer_script_toast_does_not_capture_page_interactions():
@@ -253,6 +261,8 @@ def test_renderer_script_sidebar_delete_opens_on_pointerup_when_click_is_unrelia
     assert "cursor: \"pointer\"" in text
     assert "position: \"static\"" in text
     assert "data-codex-archive-page-row" in text
+    assert "row.dataset.codexLocallyDeleted !== \"true\"" in text
+    assert "scan();\n    showToast(`" in text
     assert "data-app-action-sidebar-thread-id" in text
     assert "取消归档" in text
     assert "已归档对话" in text
